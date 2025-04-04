@@ -1,11 +1,13 @@
 // lib/controllers/auth_controller.dart
+import 'dart:io';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart'; // For debugPrint
-import '../models/firebase_service.dart';
-import '../models/user_model.dart';
+import 'package:firebase_storage/firebase_storage.dart' as firebase_storage;
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class AuthController {
-  final FirebaseService _firebaseService = FirebaseService();
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final firebase_storage.FirebaseStorage _storage = firebase_storage.FirebaseStorage.instance;
 
   // Sign up a new user
   Future<String?> signUp({
@@ -16,38 +18,65 @@ class AuthController {
     required List<String> skillsWantToLearn,
     required String role,
     required Map<String, List<String>> availability,
+    File? profilePicture,
+    required double rating,
   }) async {
     try {
-      debugPrint('Starting signup for email: $email');
-      debugPrint('Skills Can Teach: $skillsCanTeach');
-      debugPrint('Skills Want to Learn: $skillsWantToLearn');
-      debugPrint('Role: $role');
-      debugPrint('Availability: $availability');
+      print("Starting signup for email: $email");
+      print("Skills Can Teach: $skillsCanTeach");
+      print("Skills Want to Learn: $skillsWantToLearn");
+      print("Role: $role");
+      print("Availability: $availability");
+      print("Profile Picture: ${profilePicture?.path}");
+      print("Rating: $rating");
 
-      // Create user in Firebase Auth
-      User? user = await _firebaseService.signUp(email, password);
-      if (user != null) {
-        debugPrint('User created in Firebase Auth with UID: ${user.uid}');
-        // Create UserModel
-        UserModel userModel = UserModel(
-          uid: user.uid,
-          fullName: fullName,
-          email: email,
-          skillsCanTeach: skillsCanTeach,
-          skillsWantToLearn: skillsWantToLearn,
-          role: role,
-          availability: availability,
-        );
-        debugPrint('UserModel created: ${userModel.toMap()}');
-        // Save user data to Firestore
-        await _firebaseService.saveUser(userModel);
-        debugPrint('Signup completed successfully');
-        return null; // Success
+      // Step 1: Create user in Firebase Auth
+      print("Attempting to create user with email: $email");
+      UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      String userId = userCredential.user!.uid;
+      print("User created in Firebase Auth with UID: $userId");
+
+      // Step 2: Upload profile picture if provided
+      String? profilePictureUrl;
+      if (profilePicture != null) {
+        print("Uploading profile picture for UID: $userId");
+        try {
+          profilePictureUrl = await _uploadProfilePicture(userId, profilePicture);
+        } catch (e) {
+          print("Error uploading profile picture: $e");
+          // Continue with signup even if upload fails
+        }
       }
-      debugPrint('Failed to create user in Firebase Auth');
-      return 'Failed to create user';
+
+      // Step 3: Save user data to Firestore
+      Map<String, dynamic> userData = {
+        'fullName': fullName,
+        'email': email,
+        'skillsCanTeach': skillsCanTeach,
+        'skillsWantToLearn': skillsWantToLearn,
+        'role': role,
+        'availability': availability,
+        'rating': rating,
+        'createdAt': FieldValue.serverTimestamp(),
+      };
+      if (profilePictureUrl != null) {
+        userData['profilePictureUrl'] = profilePictureUrl;
+      }
+
+      await _firestore.collection('users').doc(userId).set(userData);
+      print("User data saved to Firestore for UID: $userId");
+
+      return null; // Success
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'email-already-in-use') {
+        return "The email address is already in use. Please sign in instead.";
+      }
+      return "Error during signup: ${e.message}";
     } catch (e) {
-      debugPrint('Error during signup: $e');
+      print("Error during signup: $e");
       return e.toString();
     }
   }
@@ -55,17 +84,59 @@ class AuthController {
   // Sign in an existing user
   Future<String?> signIn(String email, String password) async {
     try {
-      debugPrint('Starting signin for email: $email');
-      User? user = await _firebaseService.signIn(email, password);
-      if (user != null) {
-        debugPrint('User signed in successfully with UID: ${user.uid}');
-        return null; // Success (skip fetching user data for now)
+      print("Starting signin for email: $email");
+      print("Attempting to sign in with email: $email");
+
+      // Sign in with Firebase Auth
+      UserCredential userCredential = await _auth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      String userId = userCredential.user!.uid;
+      print("User signed in successfully with UID: $userId");
+
+      return null; // Success
+    } on FirebaseAuthException catch (e) {
+      print("FirebaseAuthException during signin: ${e.code} - ${e.message}");
+      if (e.code == 'user-not-found') {
+        return "No user found with this email. Please sign up.";
+      } else if (e.code == 'wrong-password') {
+        return "Incorrect password. Please try again.";
+      } else if (e.code == 'invalid-email') {
+        return "The email address is invalid.";
       }
-      debugPrint('Failed to sign in');
-      return 'Failed to sign in';
+      return "Error during signin: ${e.message}";
     } catch (e) {
-      debugPrint('Error during signin: $e');
-      return e.toString();
+      print("Unexpected error during signin: $e");
+      return "An unexpected error occurred: $e";
+    }
+  }
+
+  // Upload profile picture to Firebase Storage
+  Future<String> _uploadProfilePicture(String userId, File profilePicture) async {
+    try {
+      // Verify the file exists
+      if (!await profilePicture.exists()) {
+        throw Exception("Profile picture file does not exist at ${profilePicture.path}");
+      }
+
+      // Define the storage reference
+      firebase_storage.Reference ref = _storage
+          .ref()
+          .child('profile_pictures/$userId/profile.jpg');
+      print("Uploading to Firebase Storage path: ${ref.fullPath}");
+
+      // Upload the file
+      await ref.putFile(profilePicture);
+      print("Profile picture uploaded successfully");
+
+      // Get the download URL
+      String downloadUrl = await ref.getDownloadURL();
+      print("Profile picture URL: $downloadUrl");
+      return downloadUrl;
+    } catch (e) {
+      print("Error uploading profile picture: $e");
+      throw Exception("[firebase_storage/object-not-found] No object exists at the desired reference.");
     }
   }
 }

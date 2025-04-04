@@ -45,5 +45,8 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<!-- Add permission for photo library access -->
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>We need access to your photo library to select a profile picture.</string>
 </dict>
 </plist>

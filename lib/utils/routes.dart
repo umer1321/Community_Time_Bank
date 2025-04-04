@@ -1,5 +1,6 @@
 // lib/utils/routes.dart
 import 'package:flutter/material.dart';
+import '../models/user_model.dart';
 import '../views/screens/auth/login_screen.dart';
 import '../views/screens/auth/signup_screen.dart';
 import '../views/screens/auth/role_selection_screen.dart'; // New import
@@ -45,15 +46,16 @@ class Routes {
         return MaterialPageRoute(builder: (_) => const SplashScreen());
       case roleSelection:
         return MaterialPageRoute(builder: (_) => const RoleSelectionScreen());
-   /*  case home:
-        return MaterialPageRoute(builder: (_) => const HomeScreen());*/
+    case home:
+        return MaterialPageRoute(builder: (_) => const HomeScreen());
       case login:
         return MaterialPageRoute(builder: (_) => const LoginScreen());
       case signup:
         return MaterialPageRoute(builder: (_) => const SignupScreen());
-     /* case profile:
-        return MaterialPageRoute(builder: (_) => const ProfileScreen());
-      case editProfile:
+      case profile:
+        final user = settings.arguments as UserModel;
+        return MaterialPageRoute(builder: (_) => ProfileScreen(user: user));
+      /*case editProfile:
         return MaterialPageRoute(builder: (_) => const EditProfileScreen());
       case manageProfile:
         return MaterialPageRoute(builder: (_) => const ManageProfileScreen());

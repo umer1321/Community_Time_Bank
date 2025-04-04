@@ -1,9 +1,11 @@
 // lib/views/screens/auth/signup_screen.dart
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
 import '../../../controllers/auth_controller.dart';
 import '../../../utils/constants.dart';
 import '../../../utils/routes.dart';
-
 import '../../widgets/custom_button.dart';
 
 class SignupScreen extends StatefulWidget {
@@ -27,6 +29,8 @@ class _SignupScreenState extends State<SignupScreen> {
   final List<String> _selectedTimeSlots = [];
   final AuthController _authController = AuthController();
   bool _isLoading = false;
+  File? _profilePicture; // To store the selected profile picture
+  final double _defaultRating = 4.0; // Default rating for new users
 
   // Sample skills for dropdowns
   final List<String> _availableSkills = [
@@ -47,6 +51,9 @@ class _SignupScreenState extends State<SignupScreen> {
     '5:00 PM',
   ];
 
+  // Image picker instance
+  final ImagePicker _picker = ImagePicker();
+
   @override
   void dispose() {
     _fullNameController.dispose();
@@ -54,6 +61,24 @@ class _SignupScreenState extends State<SignupScreen> {
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
+  }
+
+  // Method to pick an image and persist it
+  Future<void> _pickImage() async {
+    final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
+    if (image != null) {
+      // Get the app's temporary directory
+      final tempDir = await getTemporaryDirectory();
+      final newFilePath = '${tempDir.path}/${DateTime.now().millisecondsSinceEpoch}.jpg';
+
+      // Copy the image to the new location
+      File newFile = await File(image.path).copy(newFilePath);
+      print("Profile picture saved to: $newFilePath");
+
+      setState(() {
+        _profilePicture = newFile;
+      });
+    }
   }
 
   void _nextStep() {
@@ -89,6 +114,18 @@ class _SignupScreenState extends State<SignupScreen> {
     if (_selectedDate != null) {
       availability[_selectedDate!.toIso8601String().split('T')[0]] = _selectedTimeSlots;
     }
+
+    // Verify the profile picture file exists
+    if (_profilePicture != null && !await _profilePicture!.exists()) {
+      setState(() {
+        _isLoading = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Profile picture file is missing. Please select a new image.')),
+      );
+      return;
+    }
+
     String? error = await _authController.signUp(
       fullName: _fullNameController.text.trim(),
       email: _emailController.text.trim(),
@@ -97,6 +134,8 @@ class _SignupScreenState extends State<SignupScreen> {
       skillsWantToLearn: _skillsWantToLearn,
       role: role ?? 'User',
       availability: availability,
+      profilePicture: _profilePicture,
+      rating: _defaultRating,
     );
     setState(() {
       _isLoading = false;
@@ -153,6 +192,28 @@ class _SignupScreenState extends State<SignupScreen> {
               style: AppConstants.subtitleStyle,
             ),
             const SizedBox(height: 32),
+            // Profile Picture Upload
+            Center(
+              child: Stack(
+                children: [
+                  CircleAvatar(
+                    radius: 50,
+                    backgroundImage: _profilePicture != null
+                        ? FileImage(_profilePicture!)
+                        : const NetworkImage('https://via.placeholder.com/150') as ImageProvider,
+                  ),
+                  Positioned(
+                    bottom: 0,
+                    right: 0,
+                    child: IconButton(
+                      icon: const Icon(Icons.camera_alt, color: AppConstants.primaryBlue),
+                      onPressed: _pickImage,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
             TextFormField(
               controller: _fullNameController,
               decoration: const InputDecoration(
@@ -320,7 +381,7 @@ class _SignupScreenState extends State<SignupScreen> {
             _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : CustomButton(
-              text: 'Sign Up',
+              text: 'Next',
               color: AppConstants.primaryBlue,
               onPressed: _agreeToTerms ? _nextStep : () {},
             ),
@@ -356,7 +417,6 @@ class _SignupScreenState extends State<SignupScreen> {
           style: AppConstants.subtitleStyle,
         ),
         const SizedBox(height: 32),
-        // Simple date picker (replace with a calendar widget like table_calendar for better UI)
         ElevatedButton(
           onPressed: () async {
             DateTime? picked = await showDatePicker(
@@ -396,7 +456,7 @@ class _SignupScreenState extends State<SignupScreen> {
             const SizedBox(width: 16),
             Expanded(
               child: CustomButton(
-                text: 'Save',
+                text: 'Next',
                 color: AppConstants.primaryBlue,
                 onPressed: _selectedDate != null ? _nextStep : () {},
               ),
@@ -471,7 +531,7 @@ class _SignupScreenState extends State<SignupScreen> {
             const SizedBox(width: 16),
             Expanded(
               child: CustomButton(
-                text: 'Save',
+                text: 'Sign Up',
                 color: AppConstants.primaryBlue,
                 onPressed: _selectedTimeSlots.isNotEmpty ? _nextStep : () {},
               ),
