@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "742398991578",
+    "project_id": "community-time-bank-54a08",
+    "storage_bucket": "community-time-bank-54a08.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:742398991578:android:daeda374a9c232a9dd19e3",
+        "android_client_info": {
+          "package_name": "fast.com.community_time_bank"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDjfyPQPoj8F0fTbLURXvbVKK6PSpLXltc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
