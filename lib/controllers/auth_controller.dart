@@ -40,14 +40,15 @@ class AuthController {
       print("User created in Firebase Auth with UID: $userId");
 
       // Step 2: Upload profile picture if provided
-      String? profilePictureUrl;
+      String profilePictureUrl = 'https://picsum.photos/300'; // Default URL
       if (profilePicture != null) {
         print("Uploading profile picture for UID: $userId");
         try {
           profilePictureUrl = await _uploadProfilePicture(userId, profilePicture);
         } catch (e) {
           print("Error uploading profile picture: $e");
-          // Continue with signup even if upload fails
+          // Use default URL if upload fails
+          profilePictureUrl = 'https://picsum.photos/300';
         }
       }
 
@@ -61,10 +62,12 @@ class AuthController {
         'availability': availability,
         'rating': rating,
         'createdAt': FieldValue.serverTimestamp(),
+        'profilePictureUrl': profilePictureUrl, // Always set profilePictureUrl
+        'timeCredits': 1, // Ensure this field is set
+        'hasSeenWelcomePopup': false, // Ensure this field is set
+        'location': 'Not specified', // Ensure this field is set
+        'bio': 'No bio provided.', // Ensure this field is set
       };
-      if (profilePictureUrl != null) {
-        userData['profilePictureUrl'] = profilePictureUrl;
-      }
 
       await _firestore.collection('users').doc(userId).set(userData);
       print("User data saved to Firestore for UID: $userId");
@@ -136,7 +139,7 @@ class AuthController {
       return downloadUrl;
     } catch (e) {
       print("Error uploading profile picture: $e");
-      throw Exception("[firebase_storage/object-not-found] No object exists at the desired reference.");
+      throw Exception("Failed to upload profile picture: $e");
     }
   }
 }

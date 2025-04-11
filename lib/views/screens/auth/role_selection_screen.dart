@@ -1,23 +1,34 @@
 // lib/views/screens/auth/role_selection_screen.dart
 import 'package:flutter/material.dart';
+import '../../../models/navigation_service.dart';
 import '../../../utils/constants.dart';
 import '../../../utils/routes.dart';
-
 import '../../widgets/custom_button.dart';
 
 class RoleSelectionScreen extends StatelessWidget {
-  const RoleSelectionScreen({super.key});
+  final String? initialRole;
+
+  const RoleSelectionScreen({super.key, this.initialRole});
+
+  void _navigateToSignup() {
+    print('Navigating to Signup with role: $initialRole');
+    NavigationService().navigateTo(Routes.signup, arguments: initialRole);
+  }
+
+  void _navigateToLogin() {
+    print('Navigating to Login with role: $initialRole');
+    NavigationService().navigateTo(Routes.login, arguments: initialRole);
+  }
 
   @override
   Widget build(BuildContext context) {
-    // Retrieve the selected role passed from Splash Screen
-    final String? role = ModalRoute.of(context)?.settings.arguments as String?;
-
     return Scaffold(
+      // Remove the AppBar completely to match the image
       body: Container(
         decoration: const BoxDecoration(
+          // Change to dark overlay on image of people shaking hands
           image: DecorationImage(
-            image: AssetImage('assets/images/background.jpeg'), // Same background as Splash
+            image: AssetImage('assets/images/background.jpeg'),
             fit: BoxFit.cover,
             colorFilter: ColorFilter.mode(
               Colors.black54,
@@ -29,44 +40,48 @@ class RoleSelectionScreen extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // App Title with "Community" bold and "Time Bank" regular on a new line
-                Expanded(
-                  child: Center(
-                    child: RichText(
-                      textAlign: TextAlign.center,
-                      text: const TextSpan(
-                        children: [
-                          TextSpan(
-                            text: 'Community\n',
-                            style: AppConstants.appTitleCommunityStyle,
-                          ),
-                          TextSpan(
-                            text: 'Time Bank',
-                            style: AppConstants.appTitleTimeBankStyle,
-                          ),
-                        ],
-                      ),
-                    ),
+                // Push the title down from the top
+                const Spacer(flex: 2),
+
+                // Community Time Bank text in white
+                const Text(
+                  'Community',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 36,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-                // Buttons at the bottom
+                const Text(
+                  'Time Bank',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 36,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+
+                // Push buttons to bottom of screen
+                const Spacer(flex: 4),
+
+                // Blue "Create an account" button
                 CustomButton(
                   text: 'Create an account',
-                  color: AppConstants.primaryBlue,
-                  onPressed: () {
-                    Navigator.pushNamed(context, Routes.signup, arguments: role);
-                  },
+                  color: Colors.blue,
+                  onPressed: _navigateToSignup,
                 ),
                 const SizedBox(height: 16),
+
+                // Red "Login" button
                 CustomButton(
                   text: 'Login',
-                  color: AppConstants.primaryRed,
-                  onPressed: () {
-                    Navigator.pushNamed(context, Routes.login, arguments: role);
-                  },
+                  color: Colors.red,
+                  onPressed: _navigateToLogin,
                 ),
+
+                // Small space at bottom for home indicator
+                const SizedBox(height: 16),
               ],
             ),
           ),

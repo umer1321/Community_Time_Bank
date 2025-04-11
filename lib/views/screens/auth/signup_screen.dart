@@ -4,12 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import '../../../controllers/auth_controller.dart';
+import '../../../models/navigation_service.dart'; // Import NavigationService
 import '../../../utils/constants.dart';
 import '../../../utils/routes.dart';
 import '../../widgets/custom_button.dart';
 
 class SignupScreen extends StatefulWidget {
-  const SignupScreen({super.key});
+  final String? initialRole; // Add initialRole parameter
+
+  const SignupScreen({super.key, this.initialRole});
 
   @override
   State<SignupScreen> createState() => _SignupScreenState();
@@ -29,10 +32,9 @@ class _SignupScreenState extends State<SignupScreen> {
   final List<String> _selectedTimeSlots = [];
   final AuthController _authController = AuthController();
   bool _isLoading = false;
-  File? _profilePicture; // To store the selected profile picture
-  final double _defaultRating = 4.0; // Default rating for new users
+  File? _profilePicture;
+  final double _defaultRating = 4.0;
 
-  // Sample skills for dropdowns
   final List<String> _availableSkills = [
     'Coding',
     'Cooking',
@@ -41,7 +43,6 @@ class _SignupScreenState extends State<SignupScreen> {
     'Photography',
   ];
 
-  // Sample time slots
   final List<String> _timeSlots = [
     '10:00 AM',
     '11:00 AM',
@@ -51,7 +52,6 @@ class _SignupScreenState extends State<SignupScreen> {
     '5:00 PM',
   ];
 
-  // Image picker instance
   final ImagePicker _picker = ImagePicker();
 
   @override
@@ -60,18 +60,17 @@ class _SignupScreenState extends State<SignupScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
+    if (_profilePicture != null && _profilePicture!.existsSync()) {
+      _profilePicture!.deleteSync();
+    }
     super.dispose();
   }
 
-  // Method to pick an image and persist it
   Future<void> _pickImage() async {
     final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
     if (image != null) {
-      // Get the app's temporary directory
       final tempDir = await getTemporaryDirectory();
       final newFilePath = '${tempDir.path}/${DateTime.now().millisecondsSinceEpoch}.jpg';
-
-      // Copy the image to the new location
       File newFile = await File(image.path).copy(newFilePath);
       print("Profile picture saved to: $newFilePath");
 
@@ -101,7 +100,7 @@ class _SignupScreenState extends State<SignupScreen> {
         _currentStep--;
       });
     } else {
-      Navigator.pop(context);
+      NavigationService().goBack();
     }
   }
 
@@ -109,13 +108,12 @@ class _SignupScreenState extends State<SignupScreen> {
     setState(() {
       _isLoading = true;
     });
-    final String? role = ModalRoute.of(context)?.settings.arguments as String?;
+
     Map<String, List<String>> availability = {};
     if (_selectedDate != null) {
       availability[_selectedDate!.toIso8601String().split('T')[0]] = _selectedTimeSlots;
     }
 
-    // Verify the profile picture file exists
     if (_profilePicture != null && !await _profilePicture!.exists()) {
       setState(() {
         _isLoading = false;
@@ -132,17 +130,25 @@ class _SignupScreenState extends State<SignupScreen> {
       password: _passwordController.text,
       skillsCanTeach: _skillsCanTeach,
       skillsWantToLearn: _skillsWantToLearn,
-      role: role ?? 'User',
+      role: widget.initialRole ?? 'User', // Use initialRole
       availability: availability,
       profilePicture: _profilePicture,
       rating: _defaultRating,
     );
+
+    if (_profilePicture != null && _profilePicture!.existsSync()) {
+      await _profilePicture!.delete();
+      setState(() {
+        _profilePicture = null;
+      });
+    }
+
     setState(() {
       _isLoading = false;
     });
     if (error == null) {
       setState(() {
-        _currentStep = 4; // Show success screen
+        _currentStep = 4;
       });
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -151,10 +157,16 @@ class _SignupScreenState extends State<SignupScreen> {
     }
   }
 
+  void _navigateToLogin() {
+    NavigationService().navigateTo(Routes.login, arguments: widget.initialRole);
+  }
+
+  void _navigateToHome() {
+    NavigationService().navigateToAndRemove(Routes.home);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final String? role = ModalRoute.of(context)?.settings.arguments as String?;
-
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -170,12 +182,12 @@ class _SignupScreenState extends State<SignupScreen> {
             ? _buildTimeSlotsScreen()
             : _currentStep == 2
             ? _buildAvailabilityScreen()
-            : _buildPersonalDetailsScreen(role),
+            : _buildPersonalDetailsScreen(),
       ),
     );
   }
 
-  Widget _buildPersonalDetailsScreen(String? role) {
+  Widget _buildPersonalDetailsScreen() {
     return Form(
       key: _formKey,
       child: SingleChildScrollView(
@@ -192,15 +204,17 @@ class _SignupScreenState extends State<SignupScreen> {
               style: AppConstants.subtitleStyle,
             ),
             const SizedBox(height: 32),
-            // Profile Picture Upload
             Center(
               child: Stack(
                 children: [
                   CircleAvatar(
                     radius: 50,
                     backgroundImage: _profilePicture != null
-                        ? FileImage(_profilePicture!)
-                        : const NetworkImage('https://via.placeholder.com/150') as ImageProvider,
+                        ? FileImage(_profilePicture!) as ImageProvider
+                        : const AssetImage('assets/images/default_profile.png'),
+                    onBackgroundImageError: (exception, stackTrace) {
+                      debugPrint('Error loading profile picture: $exception');
+                    },
                   ),
                   Positioned(
                     bottom: 0,
@@ -388,9 +402,7 @@ class _SignupScreenState extends State<SignupScreen> {
             const SizedBox(height: 16),
             Center(
               child: GestureDetector(
-                onTap: () {
-                  Navigator.pushNamed(context, Routes.login, arguments: role);
-                },
+                onTap: _navigateToLogin,
                 child: const Text(
                   'Already have an account? Sign In',
                   style: AppConstants.linkStyle,
@@ -562,9 +574,7 @@ class _SignupScreenState extends State<SignupScreen> {
           CustomButton(
             text: 'Go to Home',
             color: AppConstants.primaryBlue,
-            onPressed: () {
-              Navigator.pushReplacementNamed(context, Routes.home);
-            },
+            onPressed: _navigateToHome,
           ),
         ],
       ),

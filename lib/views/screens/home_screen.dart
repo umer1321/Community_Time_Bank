@@ -1,10 +1,11 @@
 // lib/views/screens/home_screen.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/scheduler.dart'; // For SchedulerBinding
+import '../../models/navigation_service.dart'; // Import NavigationService
 import '../../utils/constants.dart';
 import '../../utils/routes.dart';
 import '../widgets/UserCard.dart';
-
 import '../../models/firebase_service.dart';
 import '../../models/user_model.dart';
 
@@ -22,9 +23,8 @@ class _HomeScreenState extends State<HomeScreen> {
   List<UserModel> _filteredUsers = [];
   bool _isLoading = true;
   bool _isLoadingUsers = true;
-  int _selectedIndex = 0; // For bottom navigation bar
+  int _selectedIndex = 0;
 
-  // Search and filter state
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   String? _skillCategoryFilter;
@@ -58,7 +58,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
         debugPrint('No user signed in, redirecting to login');
-        Navigator.pushReplacementNamed(context, Routes.login);
+        _safeNavigate(Routes.login);
         return;
       }
 
@@ -67,16 +67,22 @@ class _HomeScreenState extends State<HomeScreen> {
       if (_currentUser == null) {
         debugPrint('User data not found in Firestore, signing out');
         await FirebaseAuth.instance.signOut();
-        Navigator.pushReplacementNamed(context, Routes.login);
+        _safeNavigate(Routes.login);
         return;
       }
+
+      // Update the user document with missing fields
+      await _firebaseService.updateUserWithMissingFields(user.uid);
+
+      // Reload the user data after updating
+      _currentUser = await _firebaseService.getUser(user.uid);
 
       debugPrint('User data fetched: ${_currentUser!.toMap()}');
       debugPrint('hasSeenWelcomePopup: ${_currentUser!.hasSeenWelcomePopup}');
       if (!_currentUser!.hasSeenWelcomePopup) {
         debugPrint('User has not seen welcome popup, showing popup');
         if (mounted) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
+          SchedulerBinding.instance.addPostFrameCallback((_) {
             debugPrint('Inside addPostFrameCallback, calling _showWelcomePopup');
             _showWelcomePopup();
           });
@@ -119,7 +125,7 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (e) {
       debugPrint('Error loading users: $e');
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to load users')),
+        const SnackBar(content: Text('Failed to load recommended users. Please try again.')),
       );
       setState(() {
         _isLoadingUsers = false;
@@ -246,11 +252,7 @@ class _HomeScreenState extends State<HomeScreen> {
             GestureDetector(
               onTap: () {
                 Navigator.of(context).pop();
-                Navigator.pushNamed(
-                  context,
-                  Routes.profile,
-                  arguments: _currentUser,
-                );
+                _safeNavigate(Routes.profile, arguments: _currentUser);
               },
               child: const Text(
                 'profile-time credits summary',
@@ -268,6 +270,9 @@ class _HomeScreenState extends State<HomeScreen> {
               backgroundImage: _currentUser?.profilePictureUrl != null && _currentUser!.profilePictureUrl.isNotEmpty
                   ? NetworkImage(_currentUser!.profilePictureUrl) as ImageProvider
                   : const AssetImage('assets/images/default_profile.png'),
+              onBackgroundImageError: (exception, stackTrace) {
+                debugPrint('Error loading profile picture: $exception');
+              },
             ),
             const SizedBox(height: 8),
             Text(
@@ -290,11 +295,7 @@ class _HomeScreenState extends State<HomeScreen> {
               onPressed: () {
                 debugPrint('View Profile button pressed in welcome popup');
                 Navigator.of(context).pop();
-                Navigator.pushNamed(
-                  context,
-                  Routes.profile,
-                  arguments: _currentUser,
-                );
+                _safeNavigate(Routes.profile, arguments: _currentUser);
               },
               child: const Text('View Profile'),
             ),
@@ -310,18 +311,51 @@ class _HomeScreenState extends State<HomeScreen> {
     });
     switch (index) {
       case 0:
-      // Already on Home
         break;
       case 1:
-        Navigator.pushNamed(context, Routes.requestSkill);
+        _safeNavigate(Routes.requests);
         break;
       case 2:
-        Navigator.pushNamed(context, Routes.messageList);
+        _safeNavigate(Routes.messageList);
         break;
       case 3:
-        Navigator.pushNamed(context, Routes.profile, arguments: _currentUser);
+        _safeNavigate(Routes.profile, arguments: _currentUser);
         break;
     }
+  }
+
+  void _safeNavigate(String route, {Object? arguments}) {
+    if (!mounted) return;
+
+    print('Planning navigation to $route${arguments != null ? " with arguments" : ""}');
+
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
+      try {
+        print('Executing navigation to $route${arguments != null ? " with arguments" : ""}');
+        if (arguments != null) {
+          NavigationService().navigateTo(route, arguments: arguments);
+        } else {
+          NavigationService().navigateTo(route);
+        }
+      } catch (e) {
+        print('Navigation error: $e');
+      }
+    });
+  }
+
+  void _navigateBackToRoleSelection() {
+    if (_currentUser == null || _currentUser!.role == null) {
+      debugPrint('Cannot navigate back: Current user or role is null');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('User role not found. Please log in again.')),
+      );
+      return;
+    }
+
+    debugPrint('Navigating back to RoleSelectionScreen with role: ${_currentUser!.role}');
+    _safeNavigate(Routes.roleSelection, arguments: _currentUser!.role);
   }
 
   void _clearSearch() {
@@ -346,6 +380,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          color: AppConstants.primaryBlue,
+          onPressed: _navigateBackToRoleSelection,
+        ),
         title: const Text(
           AppConstants.appName,
           style: TextStyle(
@@ -484,8 +523,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 ? const Padding(
               padding: EdgeInsets.all(16.0),
               child: Text(
-                'No users found.',
+                'No recommended users available. Try inviting more friends to join!',
                 style: AppConstants.cardSubtitleStyle,
+                textAlign: TextAlign.center,
               ),
             )
                 : ListView.builder(
@@ -503,11 +543,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   imageUrl: user.profilePictureUrl,
                   onViewProfile: () {
                     debugPrint('Navigating to profile for user: ${user.fullName}');
-                    Navigator.pushNamed(
-                      context,
-                      Routes.profile,
-                      arguments: user,
-                    );
+                    _safeNavigate(Routes.profile, arguments: user);
                   },
                   onRequestSkill: () {
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -523,11 +559,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   imageUrl: user.profilePictureUrl,
                   onViewProfile: () {
                     debugPrint('Navigating to profile for user: ${user.fullName}');
-                    Navigator.pushNamed(
-                      context,
-                      Routes.profile,
-                      arguments: user,
-                    );
+                    _safeNavigate(Routes.profile, arguments: user);
                   },
                   onRequestSkill: () {},
                   isSearchResult: false,

@@ -11,8 +11,8 @@ class UserModel {
   final bool hasSeenWelcomePopup;
   final String profilePictureUrl;
   final double rating;
-  final String? location; // Added field
-  final String? bio; // Added field
+  final String? location; // Optional field
+  final String? bio; // Optional field
 
   UserModel({
     required this.uid,
@@ -62,7 +62,7 @@ class UserModel {
           {}),
       timeCredits: map['timeCredits'] ?? 0,
       hasSeenWelcomePopup: map['hasSeenWelcomePopup'] ?? false,
-      profilePictureUrl: map['profilePictureUrl'] ?? '',
+      profilePictureUrl: map['profilePictureUrl'] ?? 'https://picsum.photos/300', // Default value
       rating: (map['rating'] ?? 0.0).toDouble(),
       location: map['location'],
       bio: map['bio'],

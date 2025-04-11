@@ -1,11 +1,10 @@
-// lib/views/screens/profile_screen.dart
+// lib/views/screens/profile/profile_screen.dart
 import 'package:flutter/material.dart';
 import '../../../models/firebase_service.dart';
 import '../../../models/user_model.dart';
 import '../../../utils/constants.dart';
-
 import 'package:firebase_auth/firebase_auth.dart';
-
+import '../../../utils/routes.dart';
 
 class ProfileScreen extends StatefulWidget {
   final UserModel user;
@@ -20,6 +19,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final FirebaseService _firebaseService = FirebaseService();
   UserModel? _user;
   bool _isLoading = true;
+  String? _selectedSkillOffered; // To store the selected skill offered
+  String? _selectedSkillWanted;  // To store the selected skill wanted
 
   @override
   void initState() {
@@ -73,239 +74,284 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
 
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppConstants.primaryBlue),
+          icon: const Icon(Icons.arrow_back_ios, color: Colors.black54, size: 20),
           onPressed: () {
             Navigator.pop(context);
           },
         ),
-        backgroundColor: AppConstants.cardBackground,
-        elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.bookmark_border, color: Colors.red, size: 22),
+            onPressed: () {
+              // Implement bookmark functionality
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.more_horiz, color: Colors.blue, size: 22),
+            onPressed: () {
+              // Implement more options
+            },
+          ),
+        ],
       ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Profile Header
-              Row(
-                children: [
-                  CircleAvatar(
-                    radius: 40,
-                    backgroundImage: _user!.profilePictureUrl.isNotEmpty
-                        ? NetworkImage(_user!.profilePictureUrl)
-                        : const NetworkImage('https://via.placeholder.com/150'),
-                    backgroundColor: Colors.white,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 2),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _user!.fullName,
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
-                          ),
+      body: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Profile header
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 30,
+                  backgroundImage: _user!.profilePictureUrl.isNotEmpty
+                      ? NetworkImage(_user!.profilePictureUrl)
+                      : const AssetImage('assets/images/default_profile.png') as ImageProvider,
+                  onBackgroundImageError: (exception, stackTrace) {
+                    debugPrint('Error loading profile picture: $exception');
+                  },
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _user!.fullName,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
                         ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            const Icon(
-                              Icons.location_on,
-                              size: 16,
+                      ),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.location_on,
+                            size: 14,
+                            color: Colors.black54,
+                          ),
+                          const SizedBox(width: 2),
+                          Text(
+                            _user!.location ?? 'Curitiba',
+                            style: const TextStyle(
+                              fontSize: 12,
                               color: Colors.black54,
                             ),
-                            const SizedBox(width: 4),
-                            Text(
-                              _user!.location ?? 'Not specified',
-                              style: const TextStyle(
-                                fontSize: 14,
-                                color: Colors.black54,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  Row(
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.share, color: AppConstants.primaryBlue),
-                        onPressed: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Share feature coming soon!')),
-                          );
-                        },
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.favorite_border, color: AppConstants.primaryRed),
-                        onPressed: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Favorite feature coming soon!')),
-                          );
-                        },
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ],
-              ),
-              const SizedBox(height: 24),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
 
-              // Skills Offered
-              const Text(
-                'Skill Offered',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
-                ),
+            // Skills Offered
+            const Text(
+              'Skill Offered',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: Colors.black87,
               ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                children: _user!.skillsCanTeach.map((skill) {
-                  return Chip(
-                    label: Text(skill),
-                    backgroundColor: AppConstants.primaryBlue,
-                    labelStyle: const TextStyle(color: Colors.white),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 16),
-
-              // Skills Requested
-              const Text(
-                'Skill Requested',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                children: _user!.skillsWantToLearn.map((skill) {
-                  return Chip(
-                    label: Text(skill),
-                    backgroundColor: AppConstants.primaryBlue,
-                    labelStyle: const TextStyle(color: Colors.white),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 16),
-
-              // Bio/Experience
-              const Text(
-                'Bio / Experience',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.blue[50],
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  _user!.bio ??
-                      'Lorem ipsum dolor sit amet consectetur. Elementum hendrerit enim id cursus. Integer egestas est adipiscing augue. Mi felis lectus metus accumsan volutpat.',
-                  style: const TextStyle(fontSize: 14, color: Colors.black54),
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // Rating
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      const Text(
-                        'Rating',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Row(
-                        children: List.generate(5, (index) {
-                          return Icon(
-                            index < _user!.rating.floor() ? Icons.star : Icons.star_border,
-                            color: Colors.amber,
-                            size: 16,
-                          );
-                        }),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${_user!.rating.toStringAsFixed(1)}/5',
-                        style: const TextStyle(fontSize: 14, color: Colors.black54),
-                      ),
-                    ],
-                  ),
-                  TextButton(
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('View all reviews feature coming soon!')),
-                      );
-                    },
-                    child: const Text(
-                      'View all',
-                      style: TextStyle(
-                        color: AppConstants.primaryBlue,
-                        fontSize: 14,
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: (_user!.skillsCanTeach.isEmpty
+                  ? ['UI Designer', 'Graphics']
+                  : _user!.skillsCanTeach).map((skill) {
+                final isSelected = _selectedSkillOffered == skill;
+                return GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _selectedSkillOffered = skill;
+                      _selectedSkillWanted = null; // Reset the other selection
+                    });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: isSelected ? Colors.blue[900] : Colors.blue[700],
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      skill,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
                       ),
                     ),
                   ),
-                ],
-              ),
-              const SizedBox(height: 24),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 16),
 
-              // Request This Skill Button (only for other users' profiles)
-              if (!isOwnProfile)
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Skill request sent to ${_user!.fullName}')),
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppConstants.primaryBlue,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+            // Skills Requested
+            const Text(
+              'Skill Requested',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: (_user!.skillsWantToLearn.isEmpty
+                  ? ['Next.js', 'Java']
+                  : _user!.skillsWantToLearn).map((skill) {
+                final isSelected = _selectedSkillWanted == skill;
+                return GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _selectedSkillWanted = skill;
+                      _selectedSkillOffered = null; // Reset the other selection
+                    });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: isSelected ? Colors.blue[900] : const Color(0xFF3F3D56),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      skill,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
                       ),
                     ),
-                    child: const Text(
-                      'Request This Skill',
-                      style: TextStyle(fontSize: 16),
+                  ),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 16),
+
+            // Bio / Experience
+            const Text(
+              'Bio / Experience',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                _user!.bio ?? 'Lorem ipsum dolor sit amet consectetur. Elementum hendrerit enim id cursus. Integer egestas est adipiscing augue. Mi felis lectus metus accumsan volutpat.',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Colors.black87,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Rating
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Rating',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.black87,
+                  ),
+                ),
+                InkWell(
+                  onTap: () {
+                    // View all ratings
+                  },
+                  child: const Text(
+                    'View all',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.blue,
                     ),
                   ),
                 ),
-            ],
-          ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Row(
+                  children: List.generate(5, (index) {
+                    return Icon(
+                      index < (_user!.rating?.floor() ?? 4) ? Icons.star : Icons.star_border,
+                      color: Colors.amber,
+                      size: 16,
+                    );
+                  }),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  '${_user!.rating ?? 4}/5',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.black54,
+                  ),
+                ),
+              ],
+            ),
+            const Spacer(),
+
+            // Request Skill Button
+            Padding(
+              padding: const EdgeInsets.only(bottom: 24.0),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: (_selectedSkillOffered != null || _selectedSkillWanted != null)
+                      ? () {
+                    // Navigate to RequestSkillExchangeScreen with the target user and selected skills
+                    Navigator.pushNamed(
+                      context,
+                      Routes.requestSkillExchange,
+                      arguments: {
+                        'targetUser': _user,
+                        'preSelectedSkillOffered': _selectedSkillOffered,
+                        'preSelectedSkillWanted': _selectedSkillWanted,
+                      },
+                    );
+                  }
+                      : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: const Text(
+                    'Request This Skill',
+                    style: TextStyle(fontSize: 14),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

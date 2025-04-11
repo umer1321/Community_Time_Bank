@@ -1,13 +1,15 @@
 // lib/views/screens/auth/login_screen.dart
 import 'package:flutter/material.dart';
 import '../../../controllers/auth_controller.dart';
+import '../../../models/navigation_service.dart'; // Import NavigationService
 import '../../../utils/constants.dart';
 import '../../../utils/routes.dart';
-
 import '../../widgets/custom_button.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  final String? initialRole; // Add initialRole parameter
+
+  const LoginScreen({super.key, this.initialRole});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -41,7 +43,7 @@ class _LoginScreenState extends State<LoginScreen> {
         _isLoading = false;
       });
       if (error == null) {
-        Navigator.pushReplacementNamed(context, Routes.home);
+        NavigationService().navigateToAndRemove(Routes.home);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(error)),
@@ -50,15 +52,21 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  void _navigateToSignup() {
+    NavigationService().navigateTo(Routes.signup, arguments: widget.initialRole);
+  }
+
+  void _goBack() {
+    NavigationService().goBack();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final String? role = ModalRoute.of(context)?.settings.arguments as String?;
-
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
+          onPressed: _goBack,
         ),
       ),
       body: Padding(
@@ -135,9 +143,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 16),
                 Center(
                   child: GestureDetector(
-                    onTap: () {
-                      Navigator.pushNamed(context, Routes.signup, arguments: role);
-                    },
+                    onTap: _navigateToSignup,
                     child: const Text(
                       "Don't have an account? Sign Up",
                       style: AppConstants.linkStyle,

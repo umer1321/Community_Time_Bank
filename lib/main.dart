@@ -1,15 +1,17 @@
 // lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'firebase_options.dart';
-import 'utils/firebase_config.dart'; // Firebase initialization
-import 'utils/routes.dart'; // Import routes
+import 'models/navigation_service.dart'; // Import NavigationService
+import 'utils/routes.dart';
+import 'views/screens/auth/splash_screen.dart'; // Import your SplashScreen
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  try {
+    await Firebase.initializeApp();
+  } catch (e) {
+    print('Firebase initialization failed: $e');
+  }
   runApp(const MyApp());
 }
 
@@ -20,13 +22,11 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Community Time Bank',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        useMaterial3: true,
-      ),
-      initialRoute: Routes.splash, // Start with Splash Screen
+      theme: ThemeData(primarySwatch: Colors.blue),
+      // Attach the navigatorKey from NavigationService
+      navigatorKey: NavigationService().navigatorKey,
+      initialRoute: Routes.splash,
       onGenerateRoute: Routes.generateRoute,
-      debugShowCheckedModeBanner: false,
     );
   }
 }
