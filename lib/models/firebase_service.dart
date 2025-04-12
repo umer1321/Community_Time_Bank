@@ -1,4 +1,3 @@
-// lib/models/firebase_service.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -299,7 +298,6 @@ class FirebaseService {
   }
 
   // Fetch recommended users
-
   Future<List<UserModel>> getRecommendedUsers(String currentUserId, List<String> skillsWantToLearn) async {
     try {
       debugPrint('Fetching recommended users from public_profiles for user ID: $currentUserId');
@@ -748,11 +746,32 @@ class FirebaseService {
         debugPrint('Scheduled deletion of contact_messages/${doc.id}');
       }
 
+      // 7. Delete favorites added by the user
+      QuerySnapshot favorites = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('favorites')
+          .get();
+      for (var doc in favorites.docs) {
+        batch.delete(doc.reference);
+        debugPrint('Scheduled deletion of users/$userId/favorites/${doc.id}');
+      }
+
+      // 8. Delete reports submitted by the user
+      QuerySnapshot reports = await _firestore
+          .collection('reports')
+          .where('userId', isEqualTo: userId)
+          .get();
+      for (var doc in reports.docs) {
+        batch.delete(doc.reference);
+        debugPrint('Scheduled deletion of reports/${doc.id}');
+      }
+
       // Commit the batch to Firestore
       await batch.commit();
       debugPrint('All Firestore deletions completed for userId: $userId');
 
-      // 7. Delete user from Firebase Authentication
+      // 9. Delete user from Firebase Authentication
       await user.delete();
       debugPrint('Firebase Authentication user deleted: $userId');
     } catch (e) {
@@ -820,6 +839,60 @@ class FirebaseService {
       await _auth.signOut();
     } catch (e) {
       debugPrint('Error signing out: $e');
+      rethrow;
+    }
+  }
+
+  // Favorites methods
+  // Fetch the list of favorited users for the current user
+  Future<List<Map<String, dynamic>>> getFavorites(String userId) async {
+    try {
+      final snapshot = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('favorites')
+          .get();
+      final favorites = snapshot.docs.map((doc) => doc.data()).toList();
+      debugPrint('Fetched ${favorites.length} favorites for user $userId');
+      return favorites;
+    } catch (e) {
+      debugPrint('Error fetching favorites for user $userId: $e');
+      rethrow;
+    }
+  }
+
+  // Remove a user from the current user's favorites
+  Future<void> removeFavorite(String favoriteUserId) async {
+    try {
+      final currentUser = _auth.currentUser;
+      if (currentUser == null) {
+        throw Exception('User not logged in');
+      }
+      await _firestore
+          .collection('users')
+          .doc(currentUser.uid)
+          .collection('favorites')
+          .doc(favoriteUserId)
+          .delete();
+      debugPrint('Removed user $favoriteUserId from favorites for user ${currentUser.uid}');
+    } catch (e) {
+      debugPrint('Error removing favorite user $favoriteUserId: $e');
+      rethrow;
+    }
+  }
+
+  // Report an Issue method
+  // Submit a report to the reports collection
+  Future<void> submitReport({required String userId, required String issue}) async {
+    try {
+      await _firestore.collection('reports').add({
+        'userId': userId,
+        'issue': issue,
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+      debugPrint('Report submitted by user $userId');
+    } catch (e) {
+      debugPrint('Error submitting report for user $userId: $e');
       rethrow;
     }
   }

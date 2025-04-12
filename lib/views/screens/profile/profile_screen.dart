@@ -117,7 +117,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   radius: 40,
                   backgroundImage: _user!.profilePictureUrl.isNotEmpty
                       ? NetworkImage(_user!.profilePictureUrl)
-                      : const NetworkImage('https://via.placeholder.com/150'),
+                      : const AssetImage('assets/images/default_profile.png') as ImageProvider,
+                  onBackgroundImageError: (exception, stackTrace) {
+                    debugPrint('Error loading profile picture: $exception');
+                  },
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -146,28 +149,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ],
             ),
             const SizedBox(height: 24),
-            const Text(
-              'Skills',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Colors.black,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              children: _user!.skillsCanTeach.isNotEmpty
-                  ? _user!.skillsCanTeach
-                  .map((skill) => Chip(
-                label: Text(skill),
-                backgroundColor: Colors.blue[100],
-                labelStyle: TextStyle(color: Colors.blue[800]),
-              ))
-                  .toList()
-                  : [const Text('No skills added')],
-            ),
-            const SizedBox(height: 24),
             _buildProfileOption(
               icon: Icons.edit,
               title: 'Edit Profile',
@@ -182,11 +163,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Navigator.pushNamed(context, Routes.changePassword);
               },
             ),
-            _buildProfileOption(
-              icon: Icons.delete,
-              title: 'Delete Account',
+            /*_buildProfileOption(
+              icon: Icons.favorite_border,
+              title: 'Favorites',
               onTap: () {
-                Navigator.pushNamed(context, Routes.deleteAccount);
+                // Assuming a route exists for Favorites
+                Navigator.pushNamed(context, Routes.favorites);
+              },
+            ),*/
+            _buildProfileOption(
+              icon: Icons.access_time,
+              title: 'Time Credit Summary',
+              onTap: () {
+                // Assuming a route exists for Time Credit Summary
+                Navigator.pushNamed(context, Routes.timeCreditSummary);
               },
             ),
             _buildProfileOption(
@@ -197,10 +187,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
               },
             ),
             _buildProfileOption(
+              icon: Icons.report_problem_outlined,
+              title: 'Report an Issue',
+              onTap: () {
+                // Assuming a route exists for Report an Issue
+                Navigator.pushNamed(context, Routes.reportIssue);
+              },
+            ),
+            _buildProfileOption(
               icon: Icons.contact_support,
-              title: 'Contact Us',
+              title: 'Contact Support',
               onTap: () {
                 Navigator.pushNamed(context, Routes.contactUs);
+              },
+            ),
+            _buildProfileOption(
+              icon: Icons.description,
+              title: 'Terms & Conditions',
+              onTap: () {
+                // Assuming a route exists for Terms & Conditions
+                Navigator.pushNamed(context, Routes.termsAndConditions);
+              },
+            ),
+            _buildProfileOption(
+              icon: Icons.privacy_tip,
+              title: 'Privacy Policy',
+              onTap: () {
+                // Assuming a route exists for Privacy Policy
+                Navigator.pushNamed(context, Routes.privacyPolicy);
+              },
+            ),
+            _buildProfileOption(
+              icon: Icons.delete,
+              title: 'Delete Account',
+              onTap: () {
+                Navigator.pushNamed(context, Routes.deleteAccount);
               },
             ),
             _buildProfileOption(
@@ -261,10 +282,3 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 }
-
-
-
-
-
-
-

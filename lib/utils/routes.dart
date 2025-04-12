@@ -29,6 +29,13 @@ import '../views/screens/skill/BookSessionScreen.dart';
 import '../views/screens/skill/RequestsScreen.dart';
 import '../views/screens/skill/ConfirmCompletionScreen.dart';
 import '../views/screens/review/rate_review_screen.dart';
+import '../views/screens/profile/FavoritesScreen.dart';
+import '../views/screens/profile/TimeCreditSummaryScreen.dart';
+import '../views/screens/profile/ReportIssueScreen.dart';
+import '../views/screens/profile/TermsAndConditionsScreen.dart';
+import '../views/screens/profile/PrivacyPolicyScreen.dart';
+import '../views/screens/profile/ManageCalendarScreen.dart';
+import '../views/screens/profile/ContactUsScreen.dart';
 
 
 
@@ -63,6 +70,11 @@ class Routes {
   static const String deleteAccount = '/delete_account'; // Added route
   static const String manageCalendar = '/manage_calendar'; // Added route
   static const String contactUs = '/contact_us'; // Added route
+  static const String favorites = '/favorites';
+  static const String timeCreditSummary = '/time_credit_summary';
+  static const String reportIssue = '/report_issue';
+  static const String termsAndConditions = '/terms_and_conditions';
+  static const String privacyPolicy = '/privacy_policy';
 
   // Route generator
   static Route<dynamic> generateRoute(RouteSettings settings) {
@@ -100,6 +112,17 @@ class Routes {
         return MaterialPageRoute(builder: (_) => const ManageCalendarScreen());
       case contactUs:
         return MaterialPageRoute(builder: (_) => const ContactUsScreen());
+      case favorites:
+        return MaterialPageRoute(builder: (_) => const FavoritesScreen());
+      case timeCreditSummary:
+        return MaterialPageRoute(builder: (_) => const TimeCreditSummaryScreen());
+      case reportIssue:
+        return MaterialPageRoute(builder: (_) => const ReportIssueScreen());
+      case termsAndConditions:
+        return MaterialPageRoute(builder: (_) => const TermsAndConditionsScreen());
+      case privacyPolicy:
+        return MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen());
+
 
       /*case profile:
         final user = settings.arguments as UserModel?;
