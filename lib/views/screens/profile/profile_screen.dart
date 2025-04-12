@@ -1,15 +1,10 @@
-// lib/views/screens/profile/profile_screen.dart
 import 'package:flutter/material.dart';
 import '../../../models/firebase_service.dart';
 import '../../../models/user_model.dart';
-import '../../../utils/constants.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import '../../../utils/routes.dart';
 
 class ProfileScreen extends StatefulWidget {
-  final UserModel user;
-
-  const ProfileScreen({super.key, required this.user});
+  const ProfileScreen({super.key});
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -19,57 +14,81 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final FirebaseService _firebaseService = FirebaseService();
   UserModel? _user;
   bool _isLoading = true;
-  String? _selectedSkillOffered; // To store the selected skill offered
-  String? _selectedSkillWanted;  // To store the selected skill wanted
+  String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
-    _fetchUserData();
+    _fetchUserProfile();
   }
 
-  Future<void> _fetchUserData() async {
+  Future<void> _fetchUserProfile() async {
     try {
-      debugPrint('Fetching user data for UID: ${widget.user.uid}');
-      final fetchedUser = await _firebaseService.getUser(widget.user.uid);
-      if (fetchedUser == null) {
-        debugPrint('User data not found for UID: ${widget.user.uid}');
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('User data not found')),
-        );
-        Navigator.pop(context);
+      String? currentUserId = _firebaseService.getCurrentUserId();
+      if (currentUserId == null) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'User not logged in';
+        });
         return;
       }
+
+      UserModel user = await _firebaseService.getUserById(currentUserId);
       setState(() {
-        _user = fetchedUser;
+        _user = user;
         _isLoading = false;
       });
-      debugPrint('User data fetched: ${_user!.toMap()}');
     } catch (e) {
-      debugPrint('Error fetching user data: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to load user data')),
-      );
       setState(() {
         _isLoading = false;
+        _errorMessage = 'Failed to load profile: $e';
       });
+    }
+  }
+
+  Future<void> _logout() async {
+    try {
+      await _firebaseService.signOut();
+      Navigator.pushNamedAndRemoveUntil(context, Routes.login, (route) => false);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to logout: $e')),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final currentUser = FirebaseAuth.instance.currentUser;
-    final isOwnProfile = currentUser != null && currentUser.uid == widget.user.uid;
-
     if (_isLoading) {
       return const Scaffold(
-        body: Center(child: CircularProgressIndicator(color: AppConstants.primaryBlue)),
+        backgroundColor: Colors.white,
+        body: Center(child: CircularProgressIndicator(color: Colors.blue)),
       );
     }
 
-    if (_user == null) {
-      return const Scaffold(
-        body: Center(child: Text('User not found')),
+    if (_errorMessage != null) {
+      return Scaffold(
+        backgroundColor: Colors.white,
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                _errorMessage!,
+                style: const TextStyle(color: Colors.black, fontSize: 16),
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('Go Back'),
+              ),
+            ],
+          ),
+        ),
       );
     }
 
@@ -78,45 +97,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.black54, size: 20),
-          onPressed: () {
-            Navigator.pop(context);
-          },
+        title: const Text(
+          'Profile',
+          style: TextStyle(
+            color: Colors.black,
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+          ),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.bookmark_border, color: Colors.red, size: 22),
-            onPressed: () {
-              // Implement bookmark functionality
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.more_horiz, color: Colors.blue, size: 22),
-            onPressed: () {
-              // Implement more options
-            },
-          ),
-        ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Profile header
             Row(
               children: [
                 CircleAvatar(
-                  radius: 30,
+                  radius: 40,
                   backgroundImage: _user!.profilePictureUrl.isNotEmpty
                       ? NetworkImage(_user!.profilePictureUrl)
-                      : const AssetImage('assets/images/default_profile.png') as ImageProvider,
-                  onBackgroundImageError: (exception, stackTrace) {
-                    debugPrint('Error loading profile picture: $exception');
-                  },
+                      : const NetworkImage('https://via.placeholder.com/150'),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 16),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -124,26 +127,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       Text(
                         _user!.fullName,
                         style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black,
                         ),
                       ),
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.location_on,
-                            size: 14,
-                            color: Colors.black54,
-                          ),
-                          const SizedBox(width: 2),
-                          Text(
-                            _user!.location ?? 'Curitiba',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Colors.black54,
-                            ),
-                          ),
-                        ],
+                      const SizedBox(height: 4),
+                      Text(
+                        _user!.email,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          color: Colors.grey,
+                        ),
                       ),
                     ],
                   ),
@@ -151,209 +146,125 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ],
             ),
             const SizedBox(height: 24),
-
-            // Skills Offered
             const Text(
-              'Skill Offered',
+              'Skills',
               style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Colors.black87,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.black,
               ),
             ),
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,
-              runSpacing: 8,
-              children: (_user!.skillsCanTeach.isEmpty
-                  ? ['UI Designer', 'Graphics']
-                  : _user!.skillsCanTeach).map((skill) {
-                final isSelected = _selectedSkillOffered == skill;
-                return GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _selectedSkillOffered = skill;
-                      _selectedSkillWanted = null; // Reset the other selection
-                    });
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: isSelected ? Colors.blue[900] : Colors.blue[700],
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      skill,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                );
-              }).toList(),
+              children: _user!.skillsCanTeach.isNotEmpty
+                  ? _user!.skillsCanTeach
+                  .map((skill) => Chip(
+                label: Text(skill),
+                backgroundColor: Colors.blue[100],
+                labelStyle: TextStyle(color: Colors.blue[800]),
+              ))
+                  .toList()
+                  : [const Text('No skills added')],
             ),
-            const SizedBox(height: 16),
-
-            // Skills Requested
-            const Text(
-              'Skill Requested',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Colors.black87,
-              ),
+            const SizedBox(height: 24),
+            _buildProfileOption(
+              icon: Icons.edit,
+              title: 'Edit Profile',
+              onTap: () {
+                Navigator.pushNamed(context, Routes.editProfile);
+              },
             ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: (_user!.skillsWantToLearn.isEmpty
-                  ? ['Next.js', 'Java']
-                  : _user!.skillsWantToLearn).map((skill) {
-                final isSelected = _selectedSkillWanted == skill;
-                return GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _selectedSkillWanted = skill;
-                      _selectedSkillOffered = null; // Reset the other selection
-                    });
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: isSelected ? Colors.blue[900] : const Color(0xFF3F3D56),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      skill,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                );
-              }).toList(),
+            _buildProfileOption(
+              icon: Icons.lock,
+              title: 'Change Password',
+              onTap: () {
+                Navigator.pushNamed(context, Routes.changePassword);
+              },
             ),
-            const SizedBox(height: 16),
-
-            // Bio / Experience
-            const Text(
-              'Bio / Experience',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Colors.black87,
-              ),
+            _buildProfileOption(
+              icon: Icons.delete,
+              title: 'Delete Account',
+              onTap: () {
+                Navigator.pushNamed(context, Routes.deleteAccount);
+              },
             ),
-            const SizedBox(height: 8),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.grey[100],
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                _user!.bio ?? 'Lorem ipsum dolor sit amet consectetur. Elementum hendrerit enim id cursus. Integer egestas est adipiscing augue. Mi felis lectus metus accumsan volutpat.',
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Colors.black87,
-                ),
-              ),
+            _buildProfileOption(
+              icon: Icons.calendar_today,
+              title: 'Manage Calendar',
+              onTap: () {
+                Navigator.pushNamed(context, Routes.manageCalendar);
+              },
             ),
-            const SizedBox(height: 16),
-
-            // Rating
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Rating',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.black87,
-                  ),
-                ),
-                InkWell(
-                  onTap: () {
-                    // View all ratings
-                  },
-                  child: const Text(
-                    'View all',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.blue,
-                    ),
-                  ),
-                ),
-              ],
+            _buildProfileOption(
+              icon: Icons.contact_support,
+              title: 'Contact Us',
+              onTap: () {
+                Navigator.pushNamed(context, Routes.contactUs);
+              },
             ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Row(
-                  children: List.generate(5, (index) {
-                    return Icon(
-                      index < (_user!.rating?.floor() ?? 4) ? Icons.star : Icons.star_border,
-                      color: Colors.amber,
-                      size: 16,
-                    );
-                  }),
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  '${_user!.rating ?? 4}/5',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Colors.black54,
-                  ),
-                ),
-              ],
-            ),
-            const Spacer(),
-
-            // Request Skill Button
-            Padding(
-              padding: const EdgeInsets.only(bottom: 24.0),
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: (_selectedSkillOffered != null || _selectedSkillWanted != null)
-                      ? () {
-                    // Navigate to RequestSkillExchangeScreen with the target user and selected skills
-                    Navigator.pushNamed(
-                      context,
-                      Routes.requestSkillExchange,
-                      arguments: {
-                        'targetUser': _user,
-                        'preSelectedSkillOffered': _selectedSkillOffered,
-                        'preSelectedSkillWanted': _selectedSkillWanted,
-                      },
-                    );
-                  }
-                      : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: const Text(
-                    'Request This Skill',
-                    style: TextStyle(fontSize: 14),
-                  ),
-                ),
-              ),
+            _buildProfileOption(
+              icon: Icons.logout,
+              title: 'Logout',
+              onTap: _logout,
+              color: Colors.red,
             ),
           ],
         ),
       ),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: 3,
+        onTap: (index) {
+          if (index == 0) {
+            Navigator.pushNamed(context, Routes.home);
+          } else if (index == 1) {
+            Navigator.pushNamed(context, Routes.requests);
+          } else if (index == 2) {
+            Navigator.pushNamed(context, Routes.messageList);
+          }
+        },
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
+          BottomNavigationBarItem(icon: Icon(Icons.swap_horiz), label: 'Requests'),
+          BottomNavigationBarItem(icon: Icon(Icons.message), label: 'Messages'),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
+        ],
+        type: BottomNavigationBarType.fixed,
+        selectedItemColor: Colors.blue,
+        unselectedItemColor: Colors.grey,
+        backgroundColor: Colors.white,
+        elevation: 0,
+        selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold),
+        unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal),
+      ),
+    );
+  }
+
+  Widget _buildProfileOption({
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+    Color color = Colors.black,
+  }) {
+    return ListTile(
+      leading: Icon(icon, color: color),
+      title: Text(
+        title,
+        style: TextStyle(
+          fontSize: 16,
+          color: color,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+      trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+      onTap: onTap,
     );
   }
 }
+
+
+
+
+
+
+

@@ -1,3 +1,4 @@
+// lib/models/firebase_service.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -11,9 +12,39 @@ class FirebaseService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
+  //// For images load
+  Future<void> migrateProfilePictureUrls() async {
+    try {
+      debugPrint('Starting profile picture URL migration...');
+      QuerySnapshot snapshot = await _firestore.collection('users').get();
+      for (var doc in snapshot.docs) {
+        Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+        if (data['profilePictureUrl'] == 'https://via.placeholder.com/300') {
+          await _firestore.collection('users').doc(doc.id).update({
+            'profilePictureUrl': 'https://picsum.photos/300',
+          });
+          debugPrint('Updated profilePictureUrl for UID: ${doc.id}');
+        }
+      }
+      // Also update public_profiles
+      snapshot = await _firestore.collection('public_profiles').get();
+      for (var doc in snapshot.docs) {
+        Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+        if (data['profilePictureUrl'] == 'https://via.placeholder.com/300') {
+          await _firestore.collection('public_profiles').doc(doc.id).update({
+            'profilePictureUrl': 'https://picsum.photos/300',
+          });
+          debugPrint('Updated profilePictureUrl in public_profiles for UID: ${doc.id}');
+        }
+      }
+      debugPrint('Profile picture URL migration completed.');
+    } catch (e) {
+      debugPrint('Error during profile picture URL migration: $e');
+      rethrow;
+    }
+  }
+
   /// Chat system
-
-
   // Create a new conversation between two users if it doesn't exist
   Future<String> createConversation(String currentUserId, String otherUserId) async {
     try {
@@ -101,7 +132,22 @@ class FirebaseService {
         'participants': [currentUserId, otherUserId],
       }, SetOptions(merge: true));
     } catch (e) {
-      print('Error sending message: $e');
+      debugPrint('Error sending message: $e');
+      rethrow;
+    }
+  }
+
+  // Get all users
+  Future<List<UserModel>> getAllUsers() async {
+    try {
+      QuerySnapshot snapshot = await _firestore.collection('users').get();
+      List<UserModel> users = snapshot.docs.map((doc) {
+        return UserModel.fromMap(doc.data() as Map<String, dynamic>, uid: doc.id);
+      }).toList();
+      debugPrint('Fetched ${users.length} users from Firestore');
+      return users;
+    } catch (e) {
+      debugPrint('Error fetching all users: $e');
       rethrow;
     }
   }
@@ -115,8 +161,6 @@ class FirebaseService {
     return UserModel.fromMap(doc.data() as Map<String, dynamic>, uid: userId);
   }
 
-  /// Rest of the FirebaseService methods remain unchanged
-
   String? getCurrentUserId() {
     final user = _auth.currentUser;
     if (user == null) {
@@ -129,6 +173,7 @@ class FirebaseService {
   // Fetch a user by UID
   Future<UserModel?> getUser(String uid) async {
     try {
+      await migrateUserAvailability(uid); // Migrate on first access
       DocumentSnapshot doc = await _firestore.collection('users').doc(uid).get();
       if (!doc.exists) {
         debugPrint('User document does not exist for UID: $uid');
@@ -184,6 +229,9 @@ class FirebaseService {
       if (!data.containsKey('timeCredits')) {
         updates['timeCredits'] = 1;
       }
+      if (!data.containsKey('availability')) {
+        updates['availability'] = [];
+      }
 
       if (updates.isNotEmpty) {
         await userRef.update(updates);
@@ -199,13 +247,73 @@ class FirebaseService {
     }
   }
 
+  // Migrate user availability data from Map<String, List<String>> to List<String>
+  Future<void> migrateUserAvailability(String userId) async {
+    try {
+      debugPrint('Starting availability migration for user $userId');
+      DocumentSnapshot doc = await _firestore.collection('users').doc(userId).get();
+      if (!doc.exists) {
+        debugPrint('User document does not exist for UID: $userId');
+        return;
+      }
+
+      if (!doc.data().toString().contains('availability')) {
+        debugPrint('No availability field in user document for UID: $userId');
+        await _firestore.collection('users').doc(userId).update({
+          'availability': [],
+        });
+        await syncUserToPublicProfile(userId);
+        debugPrint('Added empty availability list for user $userId');
+        return;
+      }
+
+      var availabilityData = doc['availability'];
+      debugPrint('Raw availability data for user $userId: $availabilityData (type: ${availabilityData.runtimeType})');
+
+      List<String> newAvailability = [];
+
+      if (availabilityData is Map) {
+        // Old format: Map<String, List<String>> (e.g., {"2025-04-13": ["09:00", "10:00"]})
+        Map<String, dynamic> availabilityMap = availabilityData as Map<String, dynamic>;
+        newAvailability = availabilityMap.keys.toList();
+        debugPrint('Migrating availability for user $userId from Map to List: $newAvailability');
+      } else if (availabilityData is List) {
+        // Already in the new format (List<String>)
+        debugPrint('Availability for user $userId is already in List format: $availabilityData');
+        return;
+      } else {
+        debugPrint('Unexpected availability format for user $userId: $availabilityData (type: ${availabilityData.runtimeType})');
+        newAvailability = [];
+      }
+
+      // Update the user's availability to the new format
+      await _firestore.collection('users').doc(userId).update({
+        'availability': newAvailability,
+      });
+      await syncUserToPublicProfile(userId);
+      debugPrint('Successfully migrated availability for user $userId to: $newAvailability');
+    } catch (e) {
+      debugPrint('Error migrating user availability for user $userId: $e');
+      rethrow;
+    }
+  }
+
   // Fetch recommended users
+
   Future<List<UserModel>> getRecommendedUsers(String currentUserId, List<String> skillsWantToLearn) async {
     try {
       debugPrint('Fetching recommended users from public_profiles for user ID: $currentUserId');
       QuerySnapshot querySnapshot = await _firestore.collection('public_profiles').get();
       List<UserModel> allUsers = [];
 
+      // Migrate availability for each user before mapping to UserModel
+      for (var doc in querySnapshot.docs) {
+        String userId = doc.id;
+        await migrateUserAvailability(userId); // Ensure availability is migrated
+      }
+
+      // Fetch the updated documents after migration
+      querySnapshot = await _firestore.collection('public_profiles').get();
       allUsers = querySnapshot.docs
           .map((doc) {
         debugPrint('Processing user document: ${doc.id} with data: ${doc.data()}');
@@ -218,6 +326,15 @@ class FirebaseService {
 
       if (allUsers.isEmpty) {
         debugPrint('No users found in public_profiles after excluding current user, falling back to users collection');
+        querySnapshot = await _firestore.collection('users').get();
+
+        // Migrate availability for users in the users collection as well
+        for (var doc in querySnapshot.docs) {
+          String userId = doc.id;
+          await migrateUserAvailability(userId); // Ensure availability is migrated
+        }
+
+        // Fetch the updated documents after migration
         querySnapshot = await _firestore.collection('users').get();
         allUsers = querySnapshot.docs
             .map((doc) {
@@ -479,6 +596,230 @@ class FirebaseService {
       debugPrint('Updated rating for user $userId to $averageRating');
     } catch (e) {
       debugPrint('Error updating rating for user $userId: $e');
+      rethrow;
+    }
+  }
+
+  // Profile
+
+  // Update user profile
+  Future<void> updateUserProfile(
+      String userId, {
+        String? fullName,
+        String? email,
+        String? location,
+        List<String>? skillsCanTeach,
+        List<String>? skillsWantToLearn,
+      }) async {
+    try {
+      Map<String, dynamic> updates = {};
+      if (fullName != null) updates['fullName'] = fullName;
+      if (email != null) updates['email'] = email;
+      if (location != null) updates['location'] = location;
+      if (skillsCanTeach != null) updates['skillsCanTeach'] = skillsCanTeach;
+      if (skillsWantToLearn != null) updates['skillsWantToLearn'] = skillsWantToLearn;
+
+      await _firestore.collection('users').doc(userId).update(updates);
+
+      // Update email in Firebase Auth if changed
+      if (email != null) {
+        await _auth.currentUser!.updateEmail(email);
+      }
+      await syncUserToPublicProfile(userId);
+    } catch (e) {
+      debugPrint('Error updating user profile: $e');
+      rethrow;
+    }
+  }
+
+  // Change user password
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    try {
+      User? user = _auth.currentUser;
+      if (user == null) {
+        throw Exception('No user signed in');
+      }
+
+      // Re-authenticate the user
+      AuthCredential credential = EmailAuthProvider.credential(
+        email: user.email!,
+        password: currentPassword,
+      );
+      await user.reauthenticateWithCredential(credential);
+
+      // Update the password
+      await user.updatePassword(newPassword);
+    } catch (e) {
+      debugPrint('Error changing password: $e');
+      rethrow;
+    }
+  }
+
+  // Delete user account
+  Future<void> deleteUserAccount(String userId) async {
+    try {
+      User? user = _auth.currentUser;
+      if (user == null || user.uid != userId) {
+        throw Exception('No user signed in or user ID mismatch');
+      }
+
+      // Start a Firestore batch to ensure atomic operations
+      WriteBatch batch = _firestore.batch();
+
+      // 1. Delete user document from 'users' collection
+      DocumentReference userRef = _firestore.collection('users').doc(userId);
+      batch.delete(userRef);
+      debugPrint('Scheduled deletion of users/$userId');
+
+      // 2. Delete user document from 'public_profiles' collection
+      DocumentReference publicProfileRef = _firestore.collection('public_profiles').doc(userId);
+      batch.delete(publicProfileRef);
+      debugPrint('Scheduled deletion of public_profiles/$userId');
+
+      // 3. Delete related requests (sent and received)
+      QuerySnapshot sentRequests = await _firestore
+          .collection('requests')
+          .where('senderId', isEqualTo: userId)
+          .get();
+      for (var doc in sentRequests.docs) {
+        batch.delete(doc.reference);
+        debugPrint('Scheduled deletion of request/${doc.id} (sender)');
+      }
+
+      QuerySnapshot receivedRequests = await _firestore
+          .collection('requests')
+          .where('receiverId', isEqualTo: userId)
+          .get();
+      for (var doc in receivedRequests.docs) {
+        batch.delete(doc.reference);
+        debugPrint('Scheduled deletion of request/${doc.id} (receiver)');
+      }
+
+      // 4. Delete conversations involving the user
+      QuerySnapshot conversations = await _firestore
+          .collection('conversations')
+          .where('participants', arrayContains: userId)
+          .get();
+      for (var doc in conversations.docs) {
+        // Delete messages subcollection
+        QuerySnapshot messages = await _firestore
+            .collection('conversations')
+            .doc(doc.id)
+            .collection('messages')
+            .get();
+        for (var msg in messages.docs) {
+          batch.delete(msg.reference);
+          debugPrint('Scheduled deletion of conversations/${doc.id}/messages/${msg.id}');
+        }
+        // Delete conversation document
+        batch.delete(doc.reference);
+        debugPrint('Scheduled deletion of conversations/${doc.id}');
+      }
+
+      // 5. Delete reviews given or received by the user
+      QuerySnapshot reviewsGiven = await _firestore
+          .collection('reviews')
+          .where('reviewerId', isEqualTo: userId)
+          .get();
+      for (var doc in reviewsGiven.docs) {
+        batch.delete(doc.reference);
+        debugPrint('Scheduled deletion of reviews/${doc.id} (given)');
+      }
+
+      QuerySnapshot reviewsReceived = await _firestore
+          .collection('reviews')
+          .where('reviewedUserId', isEqualTo: userId)
+          .get();
+      for (var doc in reviewsReceived.docs) {
+        batch.delete(doc.reference);
+        debugPrint('Scheduled deletion of reviews/${doc.id} (received)');
+      }
+
+      // 6. Delete contact messages sent by the user
+      QuerySnapshot contactMessages = await _firestore
+          .collection('contact_messages')
+          .where('userId', isEqualTo: userId)
+          .get();
+      for (var doc in contactMessages.docs) {
+        batch.delete(doc.reference);
+        debugPrint('Scheduled deletion of contact_messages/${doc.id}');
+      }
+
+      // Commit the batch to Firestore
+      await batch.commit();
+      debugPrint('All Firestore deletions completed for userId: $userId');
+
+      // 7. Delete user from Firebase Authentication
+      await user.delete();
+      debugPrint('Firebase Authentication user deleted: $userId');
+    } catch (e) {
+      debugPrint('Error deleting user account for userId $userId: $e');
+      rethrow;
+    }
+  }
+
+  // Get user availability
+  Future<List<DateTime>> getUserAvailability(String userId) async {
+    try {
+      DocumentSnapshot doc = await _firestore.collection('users').doc(userId).get();
+      if (!doc.exists || doc['availability'] == null) {
+        debugPrint('No availability data found for user $userId');
+        return [];
+      }
+
+      List<dynamic> availabilityData = doc['availability'] as List<dynamic>;
+      debugPrint('Fetched availability for user $userId: $availabilityData');
+      return availabilityData
+          .map((dateStr) => DateTime.parse(dateStr as String))
+          .toList();
+    } catch (e) {
+      debugPrint('Error fetching user availability for user $userId: $e');
+      rethrow;
+    }
+  }
+
+  // Update user availability
+  Future<void> updateUserAvailability(String userId, List<DateTime> availability) async {
+    try {
+      // Convert List<DateTime> to List<String> in YYYY-MM-DD format for Firestore
+      List<String> availabilityStrings = availability.map((date) => date.toIso8601String().split('T')[0]).toList();
+      await _firestore.collection('users').doc(userId).update({
+        'availability': availabilityStrings,
+      });
+      await syncUserToPublicProfile(userId);
+      debugPrint('Updated availability for user $userId: $availabilityStrings');
+    } catch (e) {
+      debugPrint('Error updating user availability for user $userId: $e');
+      rethrow;
+    }
+  }
+
+  // Send contact message
+  Future<void> sendContactMessage({
+    required String userId,
+    required String message,
+  }) async {
+    try {
+      await _firestore.collection('contact_messages').add({
+        'userId': userId,
+        'message': message,
+        'timestamp': Timestamp.now(),
+      });
+    } catch (e) {
+      debugPrint('Error sending contact message: $e');
+      rethrow;
+    }
+  }
+
+  // Sign out
+  Future<void> signOut() async {
+    try {
+      await _auth.signOut();
+    } catch (e) {
+      debugPrint('Error signing out: $e');
       rethrow;
     }
   }

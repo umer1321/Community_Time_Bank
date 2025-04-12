@@ -6,7 +6,7 @@ class UserModel {
   final List<String> skillsCanTeach;
   final List<String> skillsWantToLearn;
   final String role;
-  final Map<String, List<String>> availability;
+  final List<DateTime> availability; // Updated from Map<String, List<String>>
   final int timeCredits;
   final bool hasSeenWelcomePopup;
   final String profilePictureUrl;
@@ -38,7 +38,7 @@ class UserModel {
       'skillsCanTeach': skillsCanTeach,
       'skillsWantToLearn': skillsWantToLearn,
       'role': role,
-      'availability': availability,
+      'availability': availability.map((date) => date.toIso8601String().split('T')[0]).toList(),
       'timeCredits': timeCredits,
       'hasSeenWelcomePopup': hasSeenWelcomePopup,
       'profilePictureUrl': profilePictureUrl,
@@ -56,10 +56,7 @@ class UserModel {
       skillsCanTeach: List<String>.from(map['skillsCanTeach'] ?? []),
       skillsWantToLearn: List<String>.from(map['skillsWantToLearn'] ?? []),
       role: map['role'] ?? '',
-      availability: Map<String, List<String>>.from(map['availability']?.map(
-            (key, value) => MapEntry(key, List<String>.from(value)),
-      ) ??
-          {}),
+      availability: (map['availability'] as List<dynamic>?)?.map((dateStr) => DateTime.parse(dateStr as String)).toList() ?? [],
       timeCredits: map['timeCredits'] ?? 0,
       hasSeenWelcomePopup: map['hasSeenWelcomePopup'] ?? false,
       profilePictureUrl: map['profilePictureUrl'] ?? 'https://picsum.photos/300', // Default value

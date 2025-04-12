@@ -30,7 +30,6 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _skillCategoryFilter;
   String? _locationFilter;
   double? _ratingFilter;
-  String? _availabilityFilter;
 
   @override
   void initState() {
@@ -145,18 +144,15 @@ class _HomeScreenState extends State<HomeScreen> {
             user.skillsCanTeach.contains(_skillCategoryFilter);
 
         bool matchesLocation = _locationFilter == null ||
-            user.availability.keys.any((date) => date.contains(_locationFilter!));
+            user.availability.any((date) =>
+                date.toIso8601String().split('T')[0].contains(_locationFilter!));
 
         bool matchesRating = _ratingFilter == null || user.rating >= _ratingFilter!;
-
-        bool matchesAvailability = _availabilityFilter == null ||
-            user.availability.values.any((times) => times.contains(_availabilityFilter));
 
         return matchesSearch &&
             matchesSkillCategory &&
             matchesLocation &&
-            matchesRating &&
-            matchesAvailability;
+            matchesRating;
       }).toList();
       debugPrint('Filtered users: ${_filteredUsers.length}');
     });
@@ -365,7 +361,6 @@ class _HomeScreenState extends State<HomeScreen> {
       _skillCategoryFilter = null;
       _locationFilter = null;
       _ratingFilter = null;
-      _availabilityFilter = null;
       _filterUsers();
     });
   }
@@ -375,8 +370,7 @@ class _HomeScreenState extends State<HomeScreen> {
     bool isSearchActive = _searchQuery.isNotEmpty ||
         _skillCategoryFilter != null ||
         _locationFilter != null ||
-        _ratingFilter != null ||
-        _availabilityFilter != null;
+        _ratingFilter != null;
 
     return Scaffold(
       appBar: AppBar(
@@ -470,7 +464,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                         const SizedBox(width: 8),
                         _buildFilterChip(
-                          'Location',
+                          'Available Date',
                           _locationFilter,
                           ['2025-04-05', '2025-04-06'],
                               (value) {
@@ -488,18 +482,6 @@ class _HomeScreenState extends State<HomeScreen> {
                               (value) {
                             setState(() {
                               _ratingFilter = value != null ? double.parse(value) : null;
-                              _filterUsers();
-                            });
-                          },
-                        ),
-                        const SizedBox(width: 8),
-                        _buildFilterChip(
-                          'Availability',
-                          _availabilityFilter,
-                          ['10:00 AM', '11:00 AM'],
-                              (value) {
-                            setState(() {
-                              _availabilityFilter = value;
                               _filterUsers();
                             });
                           },
@@ -541,14 +523,63 @@ class _HomeScreenState extends State<HomeScreen> {
                   role: user.role,
                   rating: user.rating,
                   imageUrl: user.profilePictureUrl,
-                  onViewProfile: () {
-                    debugPrint('Navigating to profile for user: ${user.fullName}');
-                    _safeNavigate(Routes.profile, arguments: user);
+                  onViewProfile: () async {
+                    debugPrint('Checking user existence for UID: ${user.uid}');
+                    final userExists = await _firebaseService.getUser(user.uid);
+                    if (userExists != null && mounted) {
+                      debugPrint('Navigating to skill detail for user: ${user.fullName}');
+                      _safeNavigate(Routes.skillDetail, arguments: {'user': user});
+                    } else {
+                      debugPrint('User not found for UID: ${user.uid}');
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('User not found')),
+                      );
+                    }
                   },
-                  onRequestSkill: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Skill request sent to ${user.fullName}')),
-                    );
+                  onRequestSkill: () async {
+                    debugPrint('Request Skill for user: ${user.fullName}');
+                    final currentUserId = _firebaseService.getCurrentUserId();
+                    if (currentUserId == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Please log in to request a skill')),
+                      );
+                      return;
+                    }
+                    try {
+                      final userExists = await _firebaseService.getUser(user.uid);
+                      if (userExists == null) {
+                        debugPrint('Target user not found: ${user.uid}');
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('User not found')),
+                        );
+                        return;
+                      }
+                      String requestId = await _firebaseService.createSkillRequest(
+                        requesterUid: currentUserId,
+                        targetUid: user.uid,
+                        skillOffered: '', // Placeholder
+                        skillWanted: user.skillsCanTeach.isNotEmpty ? user.skillsCanTeach[0] : '',
+                        skillRequested: user.skillsCanTeach.isNotEmpty ? user.skillsCanTeach[0] : '',
+                        sessionDate: '2025-04-15', // Placeholder
+                        sessionTime: '10:00 AM', // Placeholder
+                        additionalNotes: 'Interested in learning ${user.skillsCanTeach.isNotEmpty ? user.skillsCanTeach[0] : 'a skill'}',
+                        sessionReminder: true,
+                      );
+                      String conversationId = await _firebaseService.createConversation(
+                        currentUserId,
+                        user.uid,
+                      );
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Skill request sent to ${user.fullName}')),
+                      );
+                      _safeNavigate(Routes.skillDetail, arguments: {'user': user});
+                      debugPrint('Navigating to skillDetail for user: ${user.fullName}');
+                    } catch (e) {
+                      debugPrint('Error requesting skill: $e');
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Failed to send skill request: $e')),
+                      );
+                    }
                   },
                   isSearchResult: true,
                 )
@@ -557,11 +588,20 @@ class _HomeScreenState extends State<HomeScreen> {
                   role: user.role,
                   rating: user.rating,
                   imageUrl: user.profilePictureUrl,
-                  onViewProfile: () {
-                    debugPrint('Navigating to profile for user: ${user.fullName}');
-                    _safeNavigate(Routes.profile, arguments: user);
+                  onViewProfile: () async {
+                    debugPrint('Checking user existence for UID: ${user.uid}');
+                    final userExists = await _firebaseService.getUser(user.uid);
+                    if (userExists != null && mounted) {
+                      debugPrint('Navigating to skill detail for user: ${user.fullName}');
+                      _safeNavigate(Routes.skillDetail, arguments: {'user': user});
+                    } else {
+                      debugPrint('User not found for UID: ${user.uid}');
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('User not found')),
+                      );
+                    }
                   },
-                  onRequestSkill: () {},
+                  onRequestSkill: () {}, // Non-search results don't show Request Skill button
                   isSearchResult: false,
                 );
               },

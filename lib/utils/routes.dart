@@ -1,16 +1,21 @@
-
 import 'package:flutter/material.dart';
 import '../models/user_model.dart';
 import '../views/screens/auth/login_screen.dart';
 import '../views/screens/auth/signup_screen.dart';
 import '../views/screens/auth/role_selection_screen.dart';
+import '../views/screens/profile/ManageCalendarScreen.dart';
 import '../views/screens/profile/profile_screen.dart';
 import '../views/screens/profile/edit_profile_screen.dart';
 import '../views/screens/profile/manage_profile_screen.dart';
+import '../views/screens/profile/ChangePasswordScreen.dart';
+import '../views/screens/profile/DeleteAccountScreen.dart';
+import '../views/screens/profile/DeleteAccountScreen.dart';
+import '../views/screens/profile/ContactUsScreen.dart';
+
 import '../views/screens/skill/search_skills_screen.dart';
 import '../views/screens/skill/skill_detail_screen.dart';
 import '../views/screens/skill/RequestSentDetailsScreen.dart';
-import '../views/screens/skill/RequestReceivedDetailsScreen.dart'; // Added import
+import '../views/screens/skill/RequestReceivedDetailsScreen.dart';
 import '../views/screens/message/message_list_screen.dart';
 import '../views/screens/message/chat_screen.dart';
 import '../views/screens/review/rate_review_screen.dart';
@@ -22,8 +27,9 @@ import '../views/screens/auth/splash_screen.dart';
 import '../views/screens/skill/RequestSkillExchangeScreen.dart';
 import '../views/screens/skill/BookSessionScreen.dart';
 import '../views/screens/skill/RequestsScreen.dart';
-import '../views/screens/skill/ConfirmCompletionScreen.dart'; // New import
-import '../views/screens/review/rate_review_screen.dart'; // New import
+import '../views/screens/skill/ConfirmCompletionScreen.dart';
+import '../views/screens/review/rate_review_screen.dart';
+
 
 
 // Route names as constants
@@ -53,6 +59,10 @@ class Routes {
   static const String details = '/details';
   static const String confirmCompletion = '/confirmCompletion'; // New route
   static const String review = '/review'; // New route
+  static const String changePassword = '/change_password'; // Added route
+  static const String deleteAccount = '/delete_account'; // Added route
+  static const String manageCalendar = '/manage_calendar'; // Added route
+  static const String contactUs = '/contact_us'; // Added route
 
   // Route generator
   static Route<dynamic> generateRoute(RouteSettings settings) {
@@ -76,12 +86,27 @@ class Routes {
         return MaterialPageRoute(
           builder: (_) => SignupScreen(initialRole: role),
         );
+
       case profile:
+        final user = settings.arguments as UserModel?;
+        return MaterialPageRoute(builder: (_) => const ProfileScreen());
+      case editProfile:
+        return MaterialPageRoute(builder: (_) => const EditProfileScreen());
+      case changePassword:
+        return MaterialPageRoute(builder: (_) => const ChangePasswordScreen());
+      case deleteAccount:
+        return MaterialPageRoute(builder: (_) => const DeleteAccountScreen());
+      case manageCalendar:
+        return MaterialPageRoute(builder: (_) => const ManageCalendarScreen());
+      case contactUs:
+        return MaterialPageRoute(builder: (_) => const ContactUsScreen());
+
+      /*case profile:
         final user = settings.arguments as UserModel?;
         if (user != null) {
           return MaterialPageRoute(builder: (_) => ProfileScreen(user: user));
         }
-        return _errorRoute('User argument is required for ProfileScreen');
+        return _errorRoute('User argument is required for ProfileScreen');*/
       case requestSkillExchange:
         final args = settings.arguments as Map<String, dynamic>?;
         if (args != null && args.containsKey('targetUser')) {
@@ -114,7 +139,7 @@ class Routes {
       case requests:
         return MaterialPageRoute(builder: (_) => const RequestsScreen());
       case requestSentDetails:
-      case requestSkill: // Handle both routes for RequestSentDetailsScreen
+      case requestSkill:
         final args = settings.arguments as Map<String, dynamic>?;
         if (args != null && args.containsKey('requestId')) {
           return MaterialPageRoute(
@@ -145,29 +170,19 @@ class Routes {
           );
         }
         return _errorRoute('User argument is required for SkillDetailScreen');
-     /* case editProfile:
+    /* case editProfile:
         return MaterialPageRoute(builder: (_) => const EditProfileScreen());
       case manageProfile:
         return MaterialPageRoute(builder: (_) => const ManageProfileScreen());*/
       case messageList:
         return MaterialPageRoute(builder: (_) => const MessageListScreen());
       case chat:
-      // Pass the arguments directly to ChatScreen via settings
+
         return MaterialPageRoute(
           builder: (_) => const ChatScreen(),
           settings: settings, // Pass the arguments through settings
         );
-      /*case chat:
-        final args = settings.arguments as Map<String, dynamic>?;
-        if (args != null && args.containsKey('chatId') && args.containsKey('otherUser')) {
-          return MaterialPageRoute(
-            builder: (_) => ChatScreen(
-              chatId: args['chatId'] as String,
-              otherUser: args['otherUser'] as UserModel,
-            ),
-          );
-        }
-        return _errorRoute('Chat ID and other user are required for ChatScreen');*/
+
       case confirmCompletion:
         final args = settings.arguments as Map<String, dynamic>?;
         if (args != null && args.containsKey('requestId') && args.containsKey('targetUserId')) {
@@ -180,7 +195,7 @@ class Routes {
           return MaterialPageRoute(builder: (_) => const ReviewScreen());
         }
         return _errorRoute('Request ID and target user ID are required for ReviewScreen');
-     /* case adminDashboard:
+    /* case adminDashboard:
         return MaterialPageRoute(builder: (_) => const AdminDashboardScreen());
       case manageUsers:
         return MaterialPageRoute(builder: (_) => const ManageUsersScreen());

@@ -1,44 +1,120 @@
-// lib/views/screens/skill/skill_detail_screen.dart
+// lib/views/screens/profile/skill_detail_screen.dart
 import 'package:flutter/material.dart';
-import 'package:community_time_bank/models/user_model.dart';
-import 'package:community_time_bank/utils/routes.dart';
+import '../../../models/firebase_service.dart';
+import '../../../models/user_model.dart';
+import '../../../utils/constants.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../../../utils/routes.dart';
 
-class SkillDetailScreen extends StatelessWidget {
-  final UserModel user; // Add the user parameter
+class SkillDetailScreen extends StatefulWidget {
+  final UserModel user;
 
-  const SkillDetailScreen({super.key, required this.user}); // Update constructor
+  const SkillDetailScreen({super.key, required this.user});
+
+  @override
+  State<SkillDetailScreen> createState() => _SkillDetailScreenState();
+}
+
+class _SkillDetailScreenState extends State<SkillDetailScreen> {
+  final FirebaseService _firebaseService = FirebaseService();
+  UserModel? _user;
+  bool _isLoading = true;
+  String? _selectedSkillOffered; // To store the selected skill offered
+  String? _selectedSkillWanted;  // To store the selected skill wanted
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchUserData();
+  }
+
+  Future<void> _fetchUserData() async {
+    try {
+      debugPrint('Fetching user data for UID: ${widget.user.uid}');
+      final fetchedUser = await _firebaseService.getUser(widget.user.uid);
+      if (fetchedUser == null) {
+        debugPrint('User data not found for UID: ${widget.user.uid}');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('User data not found')),
+        );
+        Navigator.pop(context);
+        return;
+      }
+      setState(() {
+        _user = fetchedUser;
+        _isLoading = false;
+      });
+      debugPrint('User data fetched: ${_user!.toMap()}');
+    } catch (e) {
+      debugPrint('Error fetching user data: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to load user data')),
+      );
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    final isOwnProfile = currentUser != null && currentUser.uid == widget.user.uid;
+
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator(color: AppConstants.primaryBlue)),
+      );
+    }
+
+    if (_user == null) {
+      return const Scaffold(
+        body: Center(child: Text('User not found')),
+      );
+    }
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
         backgroundColor: Colors.white,
         elevation: 0,
-        title: const Text(
-          'Skill Details',
-          style: TextStyle(
-            color: Colors.black,
-            fontWeight: FontWeight.bold,
-          ),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, color: Colors.black54, size: 20),
+          onPressed: () {
+            Navigator.pop(context);
+          },
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.bookmark_border, color: Colors.red, size: 22),
+            onPressed: () {
+              // Implement bookmark functionality
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.more_horiz, color: Colors.blue, size: 22),
+            onPressed: () {
+              // Implement more options
+            },
+          ),
+        ],
       ),
       body: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.symmetric(horizontal: 16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Profile header
             Row(
               children: [
                 CircleAvatar(
                   radius: 30,
-                  backgroundImage: user.profilePictureUrl.isNotEmpty
-                      ? NetworkImage(user.profilePictureUrl)
-                      : const NetworkImage('https://via.placeholder.com/150'),
+                  backgroundImage: _user!.profilePictureUrl.isNotEmpty
+                      ? NetworkImage(_user!.profilePictureUrl)
+                      : const AssetImage('assets/images/default_profile.png') as ImageProvider,
+                  onBackgroundImageError: (exception, stackTrace) {
+                    debugPrint('Error loading profile picture: $exception');
+                  },
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -46,11 +122,10 @@ class SkillDetailScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        user.fullName,
+                        _user!.fullName,
                         style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                       Row(
@@ -58,14 +133,14 @@ class SkillDetailScreen extends StatelessWidget {
                           const Icon(
                             Icons.location_on,
                             size: 14,
-                            color: Colors.grey,
+                            color: Colors.black54,
                           ),
-                          const SizedBox(width: 4),
+                          const SizedBox(width: 2),
                           Text(
-                            user.location ?? 'Not specified',
+                            _user!.location ?? 'Curitiba',
                             style: const TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey,
+                              fontSize: 12,
+                              color: Colors.black54,
                             ),
                           ),
                         ],
@@ -73,128 +148,567 @@ class SkillDetailScreen extends StatelessWidget {
                     ],
                   ),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.favorite_border, color: Colors.red),
-                  onPressed: () {
-                    // Implement favorite functionality
+              ],
+            ),
+            const SizedBox(height: 24),
+
+            // Skills Offered
+            const Text(
+              'Skill Offered',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: (_user!.skillsCanTeach.isEmpty
+                  ? ['UI Designer', 'Graphics']
+                  : _user!.skillsCanTeach).map((skill) {
+                final isSelected = _selectedSkillOffered == skill;
+                return GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _selectedSkillOffered = skill;
+                      _selectedSkillWanted = null; // Reset the other selection
+                    });
                   },
-                ),
-              ],
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: isSelected ? Colors.blue[900] : Colors.blue[700],
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      skill,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
             ),
             const SizedBox(height: 16),
+
+            // Skills Requested
             const Text(
-              'Skills I Can Teach',
+              'Skill Requested',
               style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Colors.black,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: Colors.black87,
               ),
             ),
             const SizedBox(height: 8),
             Wrap(
-              spacing: 8.0,
-              runSpacing: 4.0,
-              children: user.skillsCanTeach.isNotEmpty
-                  ? user.skillsCanTeach
-                  .map(
-                    (skill) => Chip(
-                  label: Text(skill),
-                  backgroundColor: Colors.blue[100],
-                  labelStyle: const TextStyle(color: Colors.blue),
-                ),
-              )
-                  .toList()
-                  : [
-                const Text(
-                  'No skills listed.',
-                  style: TextStyle(color: Colors.grey),
-                ),
-              ],
+              spacing: 8,
+              runSpacing: 8,
+              children: (_user!.skillsWantToLearn.isEmpty
+                  ? ['Next.js', 'Java']
+                  : _user!.skillsWantToLearn).map((skill) {
+                final isSelected = _selectedSkillWanted == skill;
+                return GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _selectedSkillWanted = skill;
+                      _selectedSkillOffered = null; // Reset the other selection
+                    });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: isSelected ? Colors.blue[900] : const Color(0xFF3F3D56),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      skill,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
             ),
             const SizedBox(height: 16),
+
+            // Bio / Experience
             const Text(
-              'Skills I Want to Learn',
+              'Bio / Experience',
               style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Colors.black,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: Colors.black87,
               ),
             ),
             const SizedBox(height: 8),
-            Wrap(
-              spacing: 8.0,
-              runSpacing: 4.0,
-              children: user.skillsWantToLearn.isNotEmpty
-                  ? user.skillsWantToLearn
-                  .map(
-                    (skill) => Chip(
-                  label: Text(skill),
-                  backgroundColor: Colors.green[100],
-                  labelStyle: const TextStyle(color: Colors.green),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                _user!.bio ?? 'Lorem ipsum dolor sit amet consectetur. Elementum hendrerit enim id cursus. Integer egestas est adipiscing augue. Mi felis lectus metus accumsan volutpat.',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Colors.black87,
                 ),
-              )
-                  .toList()
-                  : [
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Rating
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
                 const Text(
-                  'No skills listed.',
-                  style: TextStyle(color: Colors.grey),
+                  'Rating',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.black87,
+                  ),
+                ),
+                InkWell(
+                  onTap: () {
+                    // View all ratings
+                  },
+                  child: const Text(
+                    'View all',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.blue,
+                    ),
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 8),
             Row(
               children: [
-                ...List.generate(5, (index) {
-                  return Icon(
-                    index < user.rating.floor()
-                        ? Icons.star
-                        : (index < user.rating ? Icons.star_half : Icons.star_border),
-                    size: 16,
-                    color: Colors.amber,
-                  );
-                }),
+                Row(
+                  children: List.generate(5, (index) {
+                    return Icon(
+                      index < (_user!.rating?.floor() ?? 4) ? Icons.star : Icons.star_border,
+                      color: Colors.amber,
+                      size: 16,
+                    );
+                  }),
+                ),
                 const SizedBox(width: 4),
                 Text(
-                  user.rating.toStringAsFixed(1),
+                  '${_user!.rating ?? 4}/5',
                   style: const TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey,
+                    fontSize: 12,
+                    color: Colors.black54,
                   ),
                 ),
               ],
             ),
             const Spacer(),
-            Center(
-              child: ElevatedButton(
-                onPressed: () {
-                  Navigator.pushNamed(
-                    context,
-                    Routes.requestSkillExchange,
-                    arguments: {
-                      'targetUser': user,
-                    },
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+
+            // Request Skill Button
+            Padding(
+              padding: const EdgeInsets.only(bottom: 24.0),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: (_selectedSkillOffered != null || _selectedSkillWanted != null)
+                      ? () {
+                    // Navigate to RequestSkillExchangeScreen with the target user and selected skills
+                    Navigator.pushNamed(
+                      context,
+                      Routes.requestSkillExchange,
+                      arguments: {
+                        'targetUser': _user,
+                        'preSelectedSkillOffered': _selectedSkillOffered,
+                        'preSelectedSkillWanted': _selectedSkillWanted,
+                      },
+                    );
+                  }
+                      : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    elevation: 0,
                   ),
-                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-                ),
-                child: const Text(
-                  'Request Skill Exchange',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.white,
+                  child: const Text(
+                    'Request This Skill',
+                    style: TextStyle(fontSize: 14),
                   ),
                 ),
               ),
             ),
-            const SizedBox(height: 16),
           ],
         ),
       ),
     );
   }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*
+import 'package:flutter/material.dart';
+import '../../../models/firebase_service.dart';
+import '../../../models/user_model.dart';
+import '../../../utils/routes.dart';
+
+class SkillDetailScreen extends StatefulWidget {
+  final UserModel user;
+
+  const SkillDetailScreen({super.key, required this.user});
+
+  @override
+  State<SkillDetailScreen> createState() => _SkillDetailScreenState();
+}
+
+class _SkillDetailScreenState extends State<SkillDetailScreen> {
+  final FirebaseService _firebaseService = FirebaseService();
+  UserModel? _user;
+  bool _isLoading = true;
+  String? _selectedSkillOffered;
+  String? _selectedSkillWanted;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchUserData();
+  }
+
+  Future<void> _fetchUserData() async {
+    try {
+      debugPrint('Fetching user data for UID: ${widget.user.uid}');
+      final fetchedUser = await _firebaseService.getUser(widget.user.uid);
+      if (fetchedUser == null) {
+        debugPrint('User data not found for UID: ${widget.user.uid}');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('User data not found')),
+        );
+        Navigator.pop(context);
+        return;
+      }
+      setState(() {
+        _user = fetchedUser;
+        _isLoading = false;
+      });
+      debugPrint('User data fetched: ${_user!.toMap()}');
+    } catch (e) {
+      debugPrint('Error fetching user data: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to load user data')),
+      );
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator(color: Colors.blue)),
+      );
+    }
+
+    if (_user == null) {
+      return const Scaffold(
+        body: Center(child: Text('User not found')),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, color: Colors.black54, size: 20),
+          onPressed: () {
+            Navigator.pop(context);
+          },
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.bookmark_border, color: Colors.red, size: 22),
+            onPressed: () {
+              // Implement bookmark functionality
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.more_horiz, color: Colors.blue, size: 22),
+            onPressed: () {
+              // Implement more options
+            },
+          ),
+        ],
+      ),
+      body: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 30,
+                  backgroundImage: _user!.profilePictureUrl.isNotEmpty
+                      ? NetworkImage(_user!.profilePictureUrl)
+                      : const NetworkImage('https://via.placeholder.com/150'),
+                  onBackgroundImageError: (exception, stackTrace) {
+                    debugPrint('Error loading profile picture: $exception');
+                  },
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _user!.fullName,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.location_on,
+                            size: 14,
+                            color: Colors.black54,
+                          ),
+                          const SizedBox(width: 2),
+                          Text(
+                            _user!.location ?? 'Not specified',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Colors.black54,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'Skills Offered',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: (_user!.skillsCanTeach.isEmpty
+                  ? ['No skills offered']
+                  : _user!.skillsCanTeach).map((skill) {
+                final isSelected = _selectedSkillOffered == skill;
+                return GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _selectedSkillOffered = skill;
+                      _selectedSkillWanted = null;
+                    });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: isSelected ? Colors.blue[900] : Colors.blue[700],
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      skill,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Skills Requested',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: (_user!.skillsWantToLearn.isEmpty
+                  ? ['No skills requested']
+                  : _user!.skillsWantToLearn).map((skill) {
+                final isSelected = _selectedSkillWanted == skill;
+                return GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _selectedSkillWanted = skill;
+                      _selectedSkillOffered = null;
+                    });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: isSelected ? Colors.blue[900] : const Color(0xFF3F3D56),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      skill,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Bio / Experience',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                _user!.bio ?? 'No bio provided.',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Colors.black87,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Rating',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.black87,
+                  ),
+                ),
+                InkWell(
+                  onTap: () {
+                    // View all ratings
+                  },
+                  child: const Text(
+                    'View all',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.blue,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Row(
+                  children: List.generate(5, (index) {
+                    return Icon(
+                      index < (_user!.rating.floor()) ? Icons.star : Icons.star_border,
+                      color: Colors.amber,
+                      size: 16,
+                    );
+                  }),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  '${_user!.rating}/5',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.black54,
+                  ),
+                ),
+              ],
+            ),
+            const Spacer(),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 24.0),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: (_selectedSkillOffered != null || _selectedSkillWanted != null)
+                      ? () {
+                    Navigator.pushNamed(
+                      context,
+                      Routes.requestSkillExchange,
+                      arguments: {
+                        'targetUser': _user,
+                        'preSelectedSkillOffered': _selectedSkillOffered,
+                        'preSelectedSkillWanted': _selectedSkillWanted,
+                      },
+                    );
+                  }
+                      : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: const Text(
+                    'Request This Skill',
+                    style: TextStyle(fontSize: 14),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}*/
