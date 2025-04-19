@@ -1,13 +1,13 @@
-// lib/views/screens/home_screen.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/scheduler.dart'; // For SchedulerBinding
-import '../../models/navigation_service.dart'; // Import NavigationService
+import 'package:flutter/scheduler.dart';
+import '../../models/navigation_service.dart';
 import '../../utils/constants.dart';
 import '../../utils/routes.dart';
-import '../widgets/UserCard.dart';
+
 import '../../models/firebase_service.dart';
 import '../../models/user_model.dart';
+import '../widgets/UserCard.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -70,26 +70,16 @@ class _HomeScreenState extends State<HomeScreen> {
         return;
       }
 
-      // Update the user document with missing fields
       await _firebaseService.updateUserWithMissingFields(user.uid);
-
-      // Reload the user data after updating
       _currentUser = await _firebaseService.getUser(user.uid);
 
       debugPrint('User data fetched: ${_currentUser!.toMap()}');
       debugPrint('hasSeenWelcomePopup: ${_currentUser!.hasSeenWelcomePopup}');
-      if (!_currentUser!.hasSeenWelcomePopup) {
-        debugPrint('User has not seen welcome popup, showing popup');
-        if (mounted) {
-          SchedulerBinding.instance.addPostFrameCallback((_) {
-            debugPrint('Inside addPostFrameCallback, calling _showWelcomePopup');
-            _showWelcomePopup();
-          });
-        } else {
-          debugPrint('Widget not mounted, cannot show welcome popup');
-        }
-      } else {
-        debugPrint('User has already seen welcome popup, skipping');
+      if (!_currentUser!.hasSeenWelcomePopup && mounted) {
+        SchedulerBinding.instance.addPostFrameCallback((_) {
+          debugPrint('Showing welcome popup');
+          _showWelcomePopup();
+        });
       }
 
       await _loadAllUsers();
@@ -120,7 +110,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _isLoadingUsers = false;
       });
       _filterUsers();
-      debugPrint('Loaded ${_allUsers.length} recommended users');
+      debugPrint('Loaded ${_allUsers.length} recommended users: ${_allUsers.map((u) => u.fullName).toList()}');
     } catch (e) {
       debugPrint('Error loading users: $e');
       ScaffoldMessenger.of(context).showSnackBar(
@@ -149,24 +139,18 @@ class _HomeScreenState extends State<HomeScreen> {
 
         bool matchesRating = _ratingFilter == null || user.rating >= _ratingFilter!;
 
-        return matchesSearch &&
-            matchesSkillCategory &&
-            matchesLocation &&
-            matchesRating;
+        return matchesSearch && matchesSkillCategory && matchesLocation && matchesRating;
       }).toList();
       debugPrint('Filtered users: ${_filteredUsers.length}');
     });
   }
 
   void _showWelcomePopup() {
-    debugPrint('Showing welcome popup');
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         contentPadding: const EdgeInsets.all(20),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -176,55 +160,25 @@ class _HomeScreenState extends State<HomeScreen> {
               child: IconButton(
                 icon: const Icon(Icons.close),
                 onPressed: () async {
-                  debugPrint('Welcome popup dismissed');
                   Navigator.of(context).pop();
                   if (_currentUser != null) {
                     try {
                       debugPrint('Updating hasSeenWelcomePopup to true for UID: ${_currentUser!.uid}');
-                      await _firebaseService.updateWelcomePopupFlag(
-                        _currentUser!.uid,
-                        true,
-                      );
+                      await _firebaseService.updateWelcomePopupFlag(_currentUser!.uid, true);
                       setState(() {
-                        _currentUser = UserModel(
-                          uid: _currentUser!.uid,
-                          fullName: _currentUser!.fullName,
-                          email: _currentUser!.email,
-                          skillsCanTeach: _currentUser!.skillsCanTeach,
-                          skillsWantToLearn: _currentUser!.skillsWantToLearn,
-                          role: _currentUser!.role,
-                          availability: _currentUser!.availability,
-                          timeCredits: _currentUser!.timeCredits,
-                          hasSeenWelcomePopup: true,
-                          profilePictureUrl: _currentUser!.profilePictureUrl,
-                          rating: _currentUser!.rating,
-                          location: _currentUser!.location,
-                          bio: _currentUser!.bio,
-                        );
+                        _currentUser = _currentUser!.copyWith(hasSeenWelcomePopup: true);
                       });
-                      debugPrint('hasSeenWelcomePopup updated successfully');
                     } catch (e) {
                       debugPrint('Error updating welcome popup flag: $e');
-                      String errorMessage = 'Failed to update welcome status';
-                      if (e is FirebaseException) {
-                        if (e.code == 'permission-denied') {
-                          errorMessage = 'Permission denied. Please sign in again.';
-                        } else if (e.code == 'not-found') {
-                          errorMessage = 'User data not found. Please sign in again.';
-                        }
-                      }
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(errorMessage)),
+                        const SnackBar(content: Text('Failed to update welcome status')),
                       );
                     }
                   }
                 },
               ),
             ),
-            const Text(
-              'Welcome to',
-              style: TextStyle(fontSize: 16),
-            ),
+            const Text('Welcome to', style: TextStyle(fontSize: 16)),
             const Text(
               'Community Time Bank',
               style: TextStyle(
@@ -263,8 +217,8 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 24),
             CircleAvatar(
               radius: 30,
-              backgroundImage: _currentUser?.profilePictureUrl != null && _currentUser!.profilePictureUrl.isNotEmpty
-                  ? NetworkImage(_currentUser!.profilePictureUrl) as ImageProvider
+              backgroundImage: _currentUser!.profilePictureUrl.isNotEmpty
+                  ? NetworkImage(_currentUser!.profilePictureUrl)
                   : const AssetImage('assets/images/default_profile.png'),
               onBackgroundImageError: (exception, stackTrace) {
                 debugPrint('Error loading profile picture: $exception');
@@ -272,24 +226,18 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              _currentUser?.fullName ?? 'User',
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
+              _currentUser?.fullName ?? '',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 4),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppConstants.primaryRed,
-                foregroundColor: AppConstants.textWhite,
+                foregroundColor: Colors.white,
                 minimumSize: const Size(120, 36),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
               ),
               onPressed: () {
-                debugPrint('View Profile button pressed in welcome popup');
                 Navigator.of(context).pop();
                 _safeNavigate(Routes.profile, arguments: _currentUser);
               },
@@ -322,35 +270,28 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _safeNavigate(String route, {Object? arguments}) {
     if (!mounted) return;
-
-    print('Planning navigation to $route${arguments != null ? " with arguments" : ""}');
-
     SchedulerBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-
       try {
-        print('Executing navigation to $route${arguments != null ? " with arguments" : ""}');
         if (arguments != null) {
           NavigationService().navigateTo(route, arguments: arguments);
         } else {
           NavigationService().navigateTo(route);
         }
       } catch (e) {
-        print('Navigation error: $e');
+        debugPrint('Navigation error: $e');
       }
     });
   }
 
   void _navigateBackToRoleSelection() {
-    if (_currentUser == null || _currentUser!.role == null) {
+    if (_currentUser == null || _currentUser!.role.isEmpty) {
       debugPrint('Cannot navigate back: Current user or role is null');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('User role not found. Please log in again.')),
       );
       return;
     }
-
-    debugPrint('Navigating back to RoleSelectionScreen with role: ${_currentUser!.role}');
     _safeNavigate(Routes.roleSelection, arguments: _currentUser!.role);
   }
 
@@ -375,13 +316,12 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          color: AppConstants.primaryBlue,
+          icon: const Icon(Icons.arrow_back, color: AppConstants.primaryBlue),
           onPressed: _navigateBackToRoleSelection,
         ),
-        title: const Text(
+        title: Text(
           AppConstants.appName,
-          style: TextStyle(
+          style: const TextStyle(
             fontWeight: FontWeight.bold,
             color: AppConstants.primaryBlue,
           ),
@@ -390,10 +330,7 @@ class _HomeScreenState extends State<HomeScreen> {
         elevation: 0,
         actions: [
           IconButton(
-            icon: const Icon(
-              AppConstants.notificationIcon,
-              color: AppConstants.primaryBlue,
-            ),
+            icon: const Icon(AppConstants.notificationIcon, color: AppConstants.primaryBlue),
             onPressed: () {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Notifications feature coming soon!')),
@@ -517,12 +454,9 @@ class _HomeScreenState extends State<HomeScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               itemBuilder: (context, index) {
                 final user = _filteredUsers[index];
-                return isSearchActive
-                    ? UserCard(
-                  name: user.fullName,
-                  role: user.role,
-                  rating: user.rating,
-                  imageUrl: user.profilePictureUrl,
+                return UserCard(
+                  user: user,
+                  isSearchResult: isSearchActive,
                   onViewProfile: () async {
                     debugPrint('Checking user existence for UID: ${user.uid}');
                     final userExists = await _firebaseService.getUser(user.uid);
@@ -536,7 +470,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       );
                     }
                   },
-                  onRequestSkill: () async {
+                  onRequestSkill: isSearchActive
+                      ? () async {
                     debugPrint('Request Skill for user: ${user.fullName}');
                     final currentUserId = _firebaseService.getCurrentUserId();
                     if (currentUserId == null) {
@@ -557,11 +492,11 @@ class _HomeScreenState extends State<HomeScreen> {
                       String requestId = await _firebaseService.createSkillRequest(
                         requesterUid: currentUserId,
                         targetUid: user.uid,
-                        skillOffered: '', // Placeholder
+                        skillOffered: '',
                         skillWanted: user.skillsCanTeach.isNotEmpty ? user.skillsCanTeach[0] : '',
                         skillRequested: user.skillsCanTeach.isNotEmpty ? user.skillsCanTeach[0] : '',
-                        sessionDate: '2025-04-15', // Placeholder
-                        sessionTime: '10:00 AM', // Placeholder
+                        sessionDate: '2025-04-15',
+                        sessionTime: '10:00 AM',
                         additionalNotes: 'Interested in learning ${user.skillsCanTeach.isNotEmpty ? user.skillsCanTeach[0] : 'a skill'}',
                         sessionReminder: true,
                       );
@@ -573,36 +508,14 @@ class _HomeScreenState extends State<HomeScreen> {
                         SnackBar(content: Text('Skill request sent to ${user.fullName}')),
                       );
                       _safeNavigate(Routes.skillDetail, arguments: {'user': user});
-                      debugPrint('Navigating to skillDetail for user: ${user.fullName}');
                     } catch (e) {
                       debugPrint('Error requesting skill: $e');
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(content: Text('Failed to send skill request: $e')),
                       );
                     }
-                  },
-                  isSearchResult: true,
-                )
-                    : UserCard(
-                  name: user.fullName,
-                  role: user.role,
-                  rating: user.rating,
-                  imageUrl: user.profilePictureUrl,
-                  onViewProfile: () async {
-                    debugPrint('Checking user existence for UID: ${user.uid}');
-                    final userExists = await _firebaseService.getUser(user.uid);
-                    if (userExists != null && mounted) {
-                      debugPrint('Navigating to skill detail for user: ${user.fullName}');
-                      _safeNavigate(Routes.skillDetail, arguments: {'user': user});
-                    } else {
-                      debugPrint('User not found for UID: ${user.uid}');
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('User not found')),
-                      );
-                    }
-                  },
-                  onRequestSkill: () {}, // Non-search results don't show Request Skill button
-                  isSearchResult: false,
+                  }
+                      : () {},
                 );
               },
             ),
@@ -611,22 +524,10 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       bottomNavigationBar: BottomNavigationBar(
         items: const [
-          BottomNavigationBarItem(
-            icon: Icon(AppConstants.homeIcon),
-            label: 'Home',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(AppConstants.requestsIcon),
-            label: 'Requests',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(AppConstants.messagesIcon),
-            label: 'Messages',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(AppConstants.profileIcon),
-            label: 'Profile',
-          ),
+          BottomNavigationBarItem(icon: Icon(AppConstants.homeIcon), label: 'Home'),
+          BottomNavigationBarItem(icon: Icon(AppConstants.requestsIcon), label: 'Requests'),
+          BottomNavigationBarItem(icon: Icon(AppConstants.messagesIcon), label: 'Messages'),
+          BottomNavigationBarItem(icon: Icon(AppConstants.profileIcon), label: 'Profile'),
         ],
         type: BottomNavigationBarType.fixed,
         currentIndex: _selectedIndex,
@@ -682,14 +583,31 @@ class _HomeScreenState extends State<HomeScreen> {
                 style: const TextStyle(fontSize: 12),
               ),
               const SizedBox(width: 4),
-              const Icon(
-                Icons.keyboard_arrow_down,
-                size: 16,
-              ),
+              const Icon(Icons.keyboard_arrow_down, size: 16),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+extension on UserModel {
+  UserModel copyWith({bool? hasSeenWelcomePopup}) {
+    return UserModel(
+      uid: uid,
+      fullName: fullName,
+      email: email,
+      skillsCanTeach: skillsCanTeach,
+      skillsWantToLearn: skillsWantToLearn,
+      role: role,
+      availability: availability,
+      timeCredits: timeCredits,
+      hasSeenWelcomePopup: hasSeenWelcomePopup ?? this.hasSeenWelcomePopup,
+      profilePictureUrl: profilePictureUrl,
+      rating: rating,
+      location: location,
+      bio: bio,
     );
   }
 }

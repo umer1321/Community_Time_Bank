@@ -1,4 +1,3 @@
-// lib/views/screens/auth/splash_screen.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -167,57 +166,76 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     _safeNavigate(Routes.roleSelection, role: role);
   }
 
+  void _navigateToSignup() {
+    _safeNavigate(Routes.signup);
+  }
+
+  void _navigateToLogin() {
+    _safeNavigate(Routes.login);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      // Remove the AppBar completely to match the image
       body: Container(
         decoration: const BoxDecoration(
+          // Change to dark overlay on image of people shaking hands
           image: DecorationImage(
-            image: AssetImage('assets/images/background.jpeg'),
+            image: AssetImage('assets/images/background.jpg'),
             fit: BoxFit.cover,
-            colorFilter: ColorFilter.mode(Colors.black54, BlendMode.darken),
+            colorFilter: ColorFilter.mode(
+              Colors.black54,
+              BlendMode.darken,
+            ),
           ),
         ),
         child: SafeArea(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Expanded(
-                  child: Center(
-                    child: RichText(
-                      textAlign: TextAlign.center,
-                      text: const TextSpan(
-                        children: [
-                          TextSpan(
-                            text: 'Community\n',
-                            style: AppConstants.appTitleCommunityStyle,
-                          ),
-                          TextSpan(
-                            text: 'Time Bank',
-                            style: AppConstants.appTitleTimeBankStyle,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+                // Push the title down from the top
+                const Spacer(flex: 2),
+
+                // Community Time Bank text in white
+                // const Text(
+                //   'Community',
+                //   style: TextStyle(
+                //     color: Colors.white,
+                //     fontSize: 36,
+                //     fontWeight: FontWeight.bold,
+                //   ),
+                // ),
+                // const Text(
+                //   'Time Bank',
+                //   style: TextStyle(
+                //     color: Colors.white,
+                //     fontSize: 36,
+                //     fontWeight: FontWeight.bold,
+                //   ),
+                // ),
+
+                // Push buttons to bottom of screen
+                const Spacer(flex: 4),
+
+                // Blue "User" button with darker shade
+                CustomButton(
+                  text: 'User',
+                  color: Colors.blue[800]!, // Darker blue to match prototype
+                  onPressed: () => _selectRole('User'),
                 ),
-                if (_isLoading)
-                  const CircularProgressIndicator()
-                else ...[
-                  CustomButton(
-                    text: 'User',
-                    color: AppConstants.primaryBlue,
-                    onPressed: () => _selectRole('User'),
-                  ),
-                  const SizedBox(height: 16),
-                  CustomButton(
-                    text: 'Administrator',
-                    color: AppConstants.primaryRed,
-                    onPressed: () => _selectRole('Admin'),
-                  ),
-                ],
+                const SizedBox(height: 16),
+
+                // Red "Administrator" button with darker shade
+                CustomButton(
+                  text: 'Administrator',
+                  color: Colors.red[800]!, // Darker red to match prototype
+                  onPressed: () => _selectRole('Admin'),
+                ),
+
+                // Small space at bottom for home indicator
+                const SizedBox(height: 16),
               ],
             ),
           ),

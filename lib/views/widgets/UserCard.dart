@@ -1,22 +1,16 @@
-// lib/views/widgets/user_card.dart
 import 'package:flutter/material.dart';
+import '../../models/user_model.dart';
 import '../../utils/constants.dart';
 
 class UserCard extends StatelessWidget {
-  final String name;
-  final String role;
-  final double rating;
-  final String? imageUrl;
+  final UserModel user;
   final VoidCallback onViewProfile;
   final VoidCallback onRequestSkill;
   final bool isSearchResult;
 
   const UserCard({
     super.key,
-    required this.name,
-    required this.role,
-    required this.rating,
-    this.imageUrl,
+    required this.user,
     required this.onViewProfile,
     required this.onRequestSkill,
     this.isSearchResult = false,
@@ -26,7 +20,7 @@ class UserCard extends StatelessWidget {
   Widget build(BuildContext context) {
     if (isSearchResult) {
       return Card(
-        margin: const EdgeInsets.symmetric(vertical: 8.0),
+        margin: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 8.0),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
         ),
@@ -34,13 +28,17 @@ class UserCard extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(12.0),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               CircleAvatar(
                 radius: 30,
-                backgroundImage: imageUrl != null && imageUrl!.isNotEmpty
-                    ? NetworkImage(imageUrl!)
+                backgroundImage: user.profilePictureUrl.isNotEmpty
+                    ? NetworkImage(user.profilePictureUrl)
                     : const NetworkImage('https://via.placeholder.com/150'),
                 backgroundColor: Colors.white,
+                onBackgroundImageError: (error, stackTrace) {
+                  debugPrint('Error loading image for ${user.fullName}: $error');
+                },
                 child: Container(
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
@@ -55,12 +53,15 @@ class UserCard extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        Text(
-                          name,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
+                        Flexible(
+                          child: Text(
+                            user.fullName,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black87,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -71,7 +72,7 @@ class UserCard extends StatelessWidget {
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
-                            role,
+                            user.role,
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 12,
@@ -81,24 +82,26 @@ class UserCard extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 4),
-                    Row(
-                      children: List.generate(5, (index) {
-                        return Icon(
-                          index < rating.floor() ? Icons.star : Icons.star_border,
-                          color: Colors.amber,
-                          size: 16,
-                        );
-                      })..addAll([
-                        const SizedBox(width: 4),
+                    Wrap(
+                      spacing: 4,
+                      children: [
+                        ...List.generate(5, (index) {
+                          return Icon(
+                            index < user.rating.floor() ? Icons.star : Icons.star_border,
+                            color: Colors.amber,
+                            size: 16,
+                          );
+                        }),
                         Text(
-                          rating.toStringAsFixed(1),
+                          user.rating.toStringAsFixed(1),
                           style: const TextStyle(fontSize: 14, color: Colors.black54),
                         ),
-                      ]),
+                      ],
                     ),
                   ],
                 ),
               ),
+              const SizedBox(width: 8),
               ElevatedButton(
                 onPressed: onRequestSkill,
                 style: ElevatedButton.styleFrom(
@@ -107,9 +110,13 @@ class UserCard extends StatelessWidget {
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(20),
                   ),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  minimumSize: const Size(100, 36),
                 ),
-                child: const Text('Request Skill'),
+                child: const Text(
+                  'Request Skill',
+                  style: TextStyle(fontSize: 12),
+                ),
               ),
             ],
           ),
@@ -117,14 +124,13 @@ class UserCard extends StatelessWidget {
       );
     } else {
       return Card(
-        margin: const EdgeInsets.symmetric(vertical: 8.0),
+        margin: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 8.0),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
         ),
         elevation: 4,
         child: Stack(
           children: [
-            // Background image
             Container(
               height: 120,
               decoration: BoxDecoration(
@@ -138,14 +144,13 @@ class UserCard extends StatelessWidget {
                 ),
               ),
             ),
-            // Profile picture
             Positioned(
               top: 80,
               left: 16,
               child: CircleAvatar(
                 radius: 40,
-                backgroundImage: imageUrl != null && imageUrl!.isNotEmpty
-                    ? NetworkImage(imageUrl!)
+                backgroundImage: user.profilePictureUrl.isNotEmpty
+                    ? NetworkImage(user.profilePictureUrl)
                     : const NetworkImage('https://via.placeholder.com/150'),
                 backgroundColor: Colors.white,
                 child: Container(
@@ -156,7 +161,6 @@ class UserCard extends StatelessWidget {
                 ),
               ),
             ),
-            // Card content
             Padding(
               padding: const EdgeInsets.only(top: 100, left: 100, right: 16, bottom: 16),
               child: Column(
@@ -165,12 +169,15 @@ class UserCard extends StatelessWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        name,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
+                      Flexible(
+                        child: Text(
+                          user.fullName,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                       Container(
@@ -180,7 +187,7 @@ class UserCard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
-                          role,
+                          user.role,
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 12,
@@ -190,20 +197,21 @@ class UserCard extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 4),
-                  Row(
-                    children: List.generate(5, (index) {
-                      return Icon(
-                        index < rating.floor() ? Icons.star : Icons.star_border,
-                        color: Colors.amber,
-                        size: 16,
-                      );
-                    })..addAll([
-                      const SizedBox(width: 4),
+                  Wrap(
+                    spacing: 4,
+                    children: [
+                      ...List.generate(5, (index) {
+                        return Icon(
+                          index < user.rating.floor() ? Icons.star : Icons.star_border,
+                          color: Colors.amber,
+                          size: 16,
+                        );
+                      }),
                       Text(
-                        rating.toStringAsFixed(1),
+                        user.rating.toStringAsFixed(1),
                         style: const TextStyle(fontSize: 14, color: Colors.black54),
                       ),
-                    ]),
+                    ],
                   ),
                   const SizedBox(height: 8),
                   Align(

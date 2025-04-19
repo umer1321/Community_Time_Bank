@@ -245,8 +245,140 @@ class FirebaseService {
       rethrow;
     }
   }
+// In FirebaseService class
 
-  // Migrate user availability data from Map<String, List<String>> to List<String>
+  Future<void> migrateUserAvailability(String userId) async {
+    try {
+      // Only migrate for the authenticated user
+      String? currentUserId = getCurrentUserId();
+      if (userId != currentUserId) {
+        debugPrint('Skipping availability migration for user $userId (not authenticated user)');
+        return;
+      }
+
+      debugPrint('Starting availability migration for user $userId');
+      DocumentSnapshot doc = await _firestore.collection('users').doc(userId).get();
+      if (!doc.exists) {
+        debugPrint('User document does not exist for UID: $userId');
+        return;
+      }
+
+      if (!doc.data().toString().contains('availability')) {
+        debugPrint('No availability field in user document for UID: $userId');
+        await _firestore.collection('users').doc(userId).update({
+          'availability': [],
+        });
+        await syncUserToPublicProfile(userId);
+        debugPrint('Added empty availability list for user $userId');
+        return;
+      }
+
+      var availabilityData = doc['availability'];
+      debugPrint('Raw availability data for user $userId: $availabilityData (type: ${availabilityData.runtimeType})');
+
+      List<String> newAvailability = [];
+
+      if (availabilityData is Map) {
+        Map<String, dynamic> availabilityMap = availabilityData as Map<String, dynamic>;
+        newAvailability = availabilityMap.keys.toList();
+        debugPrint('Migrating availability for user $userId from Map to List: $newAvailability');
+      } else if (availabilityData is List) {
+        debugPrint('Availability for user $userId is already in List format: $availabilityData');
+        return;
+      } else {
+        debugPrint('Unexpected availability format for user $userId: $availabilityData (type: ${availabilityData.runtimeType})');
+        newAvailability = [];
+      }
+
+      await _firestore.collection('users').doc(userId).update({
+        'availability': newAvailability,
+      });
+      await syncUserToPublicProfile(userId);
+      debugPrint('Successfully migrated availability for user $userId to: $newAvailability');
+    } catch (e) {
+      debugPrint('Error migrating user availability for user $userId: $e');
+      rethrow;
+    }
+  }
+
+  Future<List<UserModel>> getRecommendedUsers(String currentUserId, List<String> skillsWantToLearn) async {
+    try {
+      debugPrint('Fetching recommended users from public_profiles for user ID: $currentUserId');
+      QuerySnapshot querySnapshot = await _firestore.collection('public_profiles').get();
+      List<UserModel> allUsers = [];
+
+      // Migrate availability only for the current user
+      await migrateUserAvailability(currentUserId);
+
+      // Process all users, handling different availability formats
+      allUsers = querySnapshot.docs
+          .map((doc) {
+        debugPrint('Processing user document: ${doc.id} with data: ${doc.data()}');
+        Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+        // Handle availability format
+        List<String> availability = [];
+        if (data.containsKey('availability')) {
+          if (data['availability'] is List) {
+            availability = List<String>.from(data['availability']);
+          } else if (data['availability'] is Map) {
+            // Handle old Map format by extracting keys
+            availability = (data['availability'] as Map).keys.cast<String>().toList();
+          }
+        }
+        // Create a new map with normalized availability
+        Map<String, dynamic> normalizedData = Map.from(data);
+        normalizedData['availability'] = availability;
+        return UserModel.fromMap(normalizedData, uid: doc.id);
+      })
+          .where((user) => user.uid != currentUserId)
+          .toList();
+
+      debugPrint('Total users after excluding current user from public_profiles: ${allUsers.length}');
+
+      if (allUsers.isEmpty) {
+        debugPrint('No users found in public_profiles, falling back to users collection');
+        querySnapshot = await _firestore.collection('users').get();
+
+        allUsers = querySnapshot.docs
+            .map((doc) {
+          debugPrint('Processing user document from users collection: ${doc.id} with data: ${doc.data()}');
+          Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+          // Handle availability format
+          List<String> availability = [];
+          if (data.containsKey('availability')) {
+            if (data['availability'] is List) {
+              availability = List<String>.from(data['availability']);
+            } else if (data['availability'] is Map) {
+              availability = (data['availability'] as Map).keys.cast<String>().toList();
+            }
+          }
+          Map<String, dynamic> normalizedData = Map.from(data);
+          normalizedData['availability'] = availability;
+          return UserModel.fromMap(normalizedData, uid: doc.id);
+        })
+            .where((user) => user.uid != currentUserId)
+            .toList();
+        debugPrint('Total users after excluding current user from users collection: ${allUsers.length}');
+      }
+
+      if (skillsWantToLearn.isNotEmpty) {
+        debugPrint('Filtering users based on skillsWantToLearn: $skillsWantToLearn');
+        allUsers = allUsers.where((user) {
+          bool matches = user.skillsCanTeach.any((skill) => skillsWantToLearn.contains(skill));
+          debugPrint('User ${user.fullName} (UID: ${user.uid}) skillsCanTeach: ${user.skillsCanTeach}, matches: $matches');
+          return matches;
+        }).toList();
+      }
+
+      allUsers.sort((a, b) => b.rating.compareTo(a.rating));
+      debugPrint('Found ${allUsers.length} recommended users after filtering');
+      return allUsers;
+    } catch (e) {
+      debugPrint('Error fetching recommended users: $e');
+      rethrow;
+    }
+  }
+ /* // Migrate user availability data from Map<String, List<String>> to List<String>
   Future<void> migrateUserAvailability(String userId) async {
     try {
       debugPrint('Starting availability migration for user $userId');
@@ -360,7 +492,7 @@ class FirebaseService {
       debugPrint('Error fetching recommended users: $e');
       rethrow;
     }
-  }
+  }*/
 
   // Update the welcome popup flag
   Future<void> updateWelcomePopupFlag(String uid, bool hasSeen) async {

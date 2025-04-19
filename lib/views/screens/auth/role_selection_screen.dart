@@ -28,7 +28,7 @@ class RoleSelectionScreen extends StatelessWidget {
         decoration: const BoxDecoration(
           // Change to dark overlay on image of people shaking hands
           image: DecorationImage(
-            image: AssetImage('assets/images/background.jpeg'),
+            image: AssetImage('assets/images/background.jpg'),
             fit: BoxFit.cover,
             colorFilter: ColorFilter.mode(
               Colors.black54,
@@ -45,22 +45,22 @@ class RoleSelectionScreen extends StatelessWidget {
                 const Spacer(flex: 2),
 
                 // Community Time Bank text in white
-                const Text(
-                  'Community',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 36,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const Text(
-                  'Time Bank',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 36,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                // const Text(
+                //   'Community',
+                //   style: TextStyle(
+                //     color: Colors.white,
+                //     fontSize: 36,
+                //     fontWeight: FontWeight.bold,
+                //   ),
+                // ),
+                // const Text(
+                //   'Time Bank',
+                //   style: TextStyle(
+                //     color: Colors.white,
+                //     fontSize: 36,
+                //     fontWeight: FontWeight.bold,
+                //   ),
+                // ),
 
                 // Push buttons to bottom of screen
                 const Spacer(flex: 4),

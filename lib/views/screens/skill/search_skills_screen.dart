@@ -1,8 +1,9 @@
-// lib/views/screens/search_skills_screen.dart
 import 'package:flutter/material.dart';
 import '../../../models/firebase_service.dart';
 import '../../../models/user_model.dart';
 import '../../../utils/routes.dart';
+import '../../widgets/UserCard.dart';
+
 
 class SearchSkillsScreen extends StatefulWidget {
   const SearchSkillsScreen({super.key});
@@ -41,7 +42,7 @@ class _SearchSkillsScreenState extends State<SearchSkillsScreen> {
       Navigator.pushNamedAndRemoveUntil(context, Routes.login, (route) => false);
       return;
     }
-    _fetchUsers();
+    await _fetchUsers();
   }
 
   Future<void> _fetchUsers() async {
@@ -49,30 +50,23 @@ class _SearchSkillsScreenState extends State<SearchSkillsScreen> {
       _isLoading = true;
     });
     try {
+      debugPrint('Fetching all users...');
       List<UserModel> users = await _firebaseService.getAllUsers();
-      // Verify each user's existence
-      List<UserModel> validUsers = [];
-      for (var user in users) {
-        final userData = await _firebaseService.getUser(user.uid);
-        if (userData != null) {
-          validUsers.add(userData);
-        } else {
-          debugPrint('Excluding invalid user with UID: ${user.uid}');
-        }
-      }
+      debugPrint('Users fetched: ${users.length}');
       setState(() {
-        _users = validUsers.where((user) => user.uid != _currentUserId).toList();
+        _users = users.where((user) => user.uid != _currentUserId).toList();
         _filteredUsers = _users;
         _isLoading = false;
       });
       debugPrint('Fetched users: ${_users.length}, Filtered users: ${_filteredUsers.length}');
+      debugPrint('Users: ${_users.map((u) => u.fullName).toList()}');
     } catch (e) {
       setState(() {
         _isLoading = false;
       });
       debugPrint('Error fetching users: $e');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to load users: $e')),
+        const SnackBar(content: Text('Failed to load users. Please try again.')),
       );
     }
   }
@@ -96,7 +90,7 @@ class _SearchSkillsScreenState extends State<SearchSkillsScreen> {
             (_selectedRating == '3+' && user.rating >= 3) ||
             (_selectedRating == '2+' && user.rating >= 2);
 
-        bool matchesAvailability = !_showAvailableOnly; // Placeholder
+        bool matchesAvailability = !_showAvailableOnly; // Placeholder, update if needed
 
         return matchesQuery && matchesCategory && matchesLocation && matchesRating && matchesAvailability;
       }).toList();
@@ -113,30 +107,18 @@ class _SearchSkillsScreenState extends State<SearchSkillsScreen> {
     }
 
     try {
-      // Verify target user exists
-      final userExists = await _firebaseService.getUser(targetUser.uid);
-      if (userExists == null) {
-        debugPrint('Target user not found: ${targetUser.uid}');
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('User not found')),
-        );
-        return;
-      }
-
-      // Create a skill request
       String requestId = await _firebaseService.createSkillRequest(
         requesterUid: _currentUserId!,
         targetUid: targetUser.uid,
-        skillOffered: '', // Placeholder, update based on your app logic
+        skillOffered: '',
         skillWanted: targetUser.skillsCanTeach.isNotEmpty ? targetUser.skillsCanTeach[0] : '',
         skillRequested: targetUser.skillsCanTeach.isNotEmpty ? targetUser.skillsCanTeach[0] : '',
-        sessionDate: '2025-04-15', // Placeholder
-        sessionTime: '10:00 AM', // Placeholder
+        sessionDate: '2025-04-15',
+        sessionTime: '10:00 AM',
         additionalNotes: 'Interested in learning ${targetUser.skillsCanTeach.isNotEmpty ? targetUser.skillsCanTeach[0] : 'a skill'}',
         sessionReminder: true,
       );
 
-      // Optionally start a conversation
       String conversationId = await _firebaseService.createConversation(
         _currentUserId!,
         targetUser.uid,
@@ -146,7 +128,6 @@ class _SearchSkillsScreenState extends State<SearchSkillsScreen> {
         SnackBar(content: Text('Skill request sent to ${targetUser.fullName}')),
       );
 
-      // Navigate to SkillDetailScreen instead of messageList
       Navigator.pushNamed(
         context,
         Routes.skillDetail,
@@ -196,7 +177,6 @@ class _SearchSkillsScreenState extends State<SearchSkillsScreen> {
             icon: const Icon(Icons.notifications, color: Colors.black),
             onPressed: () {
               debugPrint('Notifications button pressed');
-              // Implement notification functionality
             },
           ),
         ],
@@ -342,68 +322,20 @@ class _SearchSkillsScreenState extends State<SearchSkillsScreen> {
                 itemCount: _filteredUsers.length,
                 itemBuilder: (context, index) {
                   final user = _filteredUsers[index];
-                  debugPrint('Building ListTile for user: ${user.fullName}, UID: ${user.uid}');
-                  return Card(
-                    elevation: 2,
-                    margin: const EdgeInsets.symmetric(vertical: 4),
-                    child: ListTile(
-                      leading: CircleAvatar(
-                        backgroundImage: user.profilePictureUrl.isNotEmpty
-                            ? NetworkImage(user.profilePictureUrl)
-                            : const NetworkImage('https://picsum.photos/300'),
-                        onBackgroundImageError: (error, stackTrace) {
-                          debugPrint('Error loading image for ${user.fullName}: $error');
-                        },
-                      ),
-                      title: Text(user.fullName),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: List.generate(5, (index) {
-                              return Icon(
-                                index < user.rating.floor() ? Icons.star : Icons.star_border,
-                                color: Colors.amber,
-                                size: 16,
-                              );
-                            }),
-                          ),
-                          const SizedBox(height: 4),
-                          const Text(
-                            'User',
-                            style: TextStyle(fontSize: 12, color: Colors.grey),
-                          ),
-                        ],
-                      ),
-                      trailing: ElevatedButton(
-                        onPressed: () {
-                          debugPrint('Request Skill button pressed for user: ${user.fullName}');
-                          _requestSkill(user);
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          elevation: 0,
-                        ),
-                        child: const Text(
-                          'Request Skill',
-                          style: TextStyle(fontSize: 12),
-                        ),
-                      ),
-                      onTap: () {
-                        debugPrint('ListTile tapped for user: ${user.fullName}, UID: ${user.uid}');
-                        FocusScope.of(context).unfocus();
-                        Navigator.pushNamed(
-                          context,
-                          Routes.skillDetail,
-                          arguments: {'user': user},
-                        );
-                      },
-                    ),
+                  debugPrint('Building UserCard for user: ${user.fullName}, UID: ${user.uid}');
+                  return UserCard(
+                    user: user,
+                    isSearchResult: true,
+                    onRequestSkill: () => _requestSkill(user),
+                    onViewProfile: () {
+                      debugPrint('View profile for user: ${user.fullName}, UID: ${user.uid}');
+                      FocusScope.of(context).unfocus();
+                      Navigator.pushNamed(
+                        context,
+                        Routes.skillDetail,
+                        arguments: {'user': user},
+                      );
+                    },
                   );
                 },
               ),
@@ -436,8 +368,8 @@ class _SearchSkillsScreenState extends State<SearchSkillsScreen> {
         unselectedItemColor: Colors.grey,
         backgroundColor: Colors.white,
         elevation: 0,
-        selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold),
-        unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal),
+        selectedLabelStyle: TextStyle(fontWeight: FontWeight.bold),
+        unselectedLabelStyle: TextStyle(fontWeight: FontWeight.normal),
       ),
     );
   }
