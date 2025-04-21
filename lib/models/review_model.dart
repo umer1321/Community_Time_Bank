@@ -1,5 +1,5 @@
-// lib/models/review_model.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'user_model.dart';
 
 class ReviewModel {
   final String id;
@@ -9,6 +9,7 @@ class ReviewModel {
   final double rating;
   final String comment;
   final String createdAt;
+  UserModel? reviewer;
 
   ReviewModel({
     required this.id,
@@ -18,6 +19,7 @@ class ReviewModel {
     required this.rating,
     required this.comment,
     required this.createdAt,
+    this.reviewer,
   });
 
   factory ReviewModel.fromFirestore(DocumentSnapshot doc) {
@@ -27,7 +29,7 @@ class ReviewModel {
       requestId: data['requestId'] ?? '',
       reviewerId: data['reviewerId'] ?? '',
       reviewedUserId: data['reviewedUserId'] ?? '',
-      rating: (data['rating'] as num?)?.toDouble() ?? 0.0,
+      rating: (data['rating'] as num).toDouble(),
       comment: data['comment'] ?? '',
       createdAt: data['createdAt'] ?? '',
     );

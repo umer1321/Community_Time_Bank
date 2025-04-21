@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../../../models/user_model.dart';
 import '../../../models/firebase_service.dart';
 import '../../../models/request_model.dart';
 import '../../../utils/constants.dart';
 import '../../../utils/routes.dart';
-import 'ConfirmCompletionScreen.dart';
+import 'package:community_time_bank/views/screens/skill/confirm_completion_screen.dart';
 
 class RequestSentDetailsScreen extends StatefulWidget {
   final String requestId;
@@ -42,7 +43,7 @@ class _RequestSentDetailsScreenState extends State<RequestSentDetailsScreen> {
       }
 
       final request = await _firebaseService.getRequestById(widget.requestId);
-      print('Fetched request: ${request.id}');
+      print('Fetched request: ${request.id}, Status: ${request.status}');
 
       setState(() {
         _request = request;
@@ -181,6 +182,20 @@ class _RequestSentDetailsScreenState extends State<RequestSentDetailsScreen> {
       );
     }
 
+    // Determine if the "Confirm Completion" button should be shown
+    bool canConfirmCompletion = false;
+    try {
+      final sessionDateTime = DateFormat('yyyy-MM-dd hh:mm a').parse('${_request!.sessionDate} ${_request!.sessionTime}');
+      canConfirmCompletion = _request!.status == 'accepted' && sessionDateTime.isBefore(DateTime.now());
+      print('Can confirm completion: $canConfirmCompletion');
+      print('Status: ${_request!.status}');
+      print('Session DateTime: $sessionDateTime');
+      print('Current DateTime: ${DateTime.now()}');
+    } catch (e) {
+      print('Error parsing session date/time: $e');
+      canConfirmCompletion = false;
+    }
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -196,13 +211,16 @@ class _RequestSentDetailsScreenState extends State<RequestSentDetailsScreen> {
         elevation: 1,
         actions: [
           IconButton(
+            icon: const Icon(Icons.refresh, color: Colors.black),
+            onPressed: _fetchRequestDetails, // Add refresh button to manually fetch updated data
+          ),
+          IconButton(
             icon: const Icon(Icons.chat_bubble_outline, color: Colors.blue),
-            onPressed: _navigateToChat, // Updated to navigate to ChatScreen
+            onPressed: _navigateToChat,
           ),
           IconButton(
             icon: const Icon(Icons.favorite_border, color: Colors.red),
             onPressed: () {
-              // Implement favorite functionality
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Favorite action not implemented yet')),
               );
@@ -407,7 +425,9 @@ class _RequestSentDetailsScreenState extends State<RequestSentDetailsScreen> {
                 const Spacer(),
                 Switch(
                   value: _sessionReminder,
-                  onChanged: (value) {
+                  onChanged: _request!.status == 'completed'
+                      ? null
+                      : (value) {
                     _updateReminder(value);
                   },
                   activeColor: Colors.blue,
@@ -418,7 +438,9 @@ class _RequestSentDetailsScreenState extends State<RequestSentDetailsScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              _sessionReminder
+              _request!.status == 'completed'
+                  ? 'Session completed'
+                  : _sessionReminder
                   ? 'Now you receive reminders for this session'
                   : 'You won\'t receive reminders for this session',
               style: TextStyle(
@@ -433,7 +455,7 @@ class _RequestSentDetailsScreenState extends State<RequestSentDetailsScreen> {
                 children: [
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: _editRequest,
+                      onPressed: _request!.status == 'completed' ? null : _editRequest,
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Colors.black,
                         side: const BorderSide(color: Colors.grey),
@@ -454,7 +476,7 @@ class _RequestSentDetailsScreenState extends State<RequestSentDetailsScreen> {
                   const SizedBox(width: 16),
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: _withdrawRequest,
+                      onPressed: _request!.status == 'completed' ? null : _withdrawRequest,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.blue,
                         shape: RoundedRectangleBorder(
@@ -472,6 +494,29 @@ class _RequestSentDetailsScreenState extends State<RequestSentDetailsScreen> {
                       ),
                     ),
                   ),
+                  if (canConfirmCompletion) ...[
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: _confirmCompletion,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        child: const Text(
+                          'Confirm Completion',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

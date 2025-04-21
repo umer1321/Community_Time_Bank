@@ -245,7 +245,6 @@ class FirebaseService {
       rethrow;
     }
   }
-// In FirebaseService class
 
   Future<void> migrateUserAvailability(String userId) async {
     try {
@@ -378,121 +377,6 @@ class FirebaseService {
       rethrow;
     }
   }
- /* // Migrate user availability data from Map<String, List<String>> to List<String>
-  Future<void> migrateUserAvailability(String userId) async {
-    try {
-      debugPrint('Starting availability migration for user $userId');
-      DocumentSnapshot doc = await _firestore.collection('users').doc(userId).get();
-      if (!doc.exists) {
-        debugPrint('User document does not exist for UID: $userId');
-        return;
-      }
-
-      if (!doc.data().toString().contains('availability')) {
-        debugPrint('No availability field in user document for UID: $userId');
-        await _firestore.collection('users').doc(userId).update({
-          'availability': [],
-        });
-        await syncUserToPublicProfile(userId);
-        debugPrint('Added empty availability list for user $userId');
-        return;
-      }
-
-      var availabilityData = doc['availability'];
-      debugPrint('Raw availability data for user $userId: $availabilityData (type: ${availabilityData.runtimeType})');
-
-      List<String> newAvailability = [];
-
-      if (availabilityData is Map) {
-        // Old format: Map<String, List<String>> (e.g., {"2025-04-13": ["09:00", "10:00"]})
-        Map<String, dynamic> availabilityMap = availabilityData as Map<String, dynamic>;
-        newAvailability = availabilityMap.keys.toList();
-        debugPrint('Migrating availability for user $userId from Map to List: $newAvailability');
-      } else if (availabilityData is List) {
-        // Already in the new format (List<String>)
-        debugPrint('Availability for user $userId is already in List format: $availabilityData');
-        return;
-      } else {
-        debugPrint('Unexpected availability format for user $userId: $availabilityData (type: ${availabilityData.runtimeType})');
-        newAvailability = [];
-      }
-
-      // Update the user's availability to the new format
-      await _firestore.collection('users').doc(userId).update({
-        'availability': newAvailability,
-      });
-      await syncUserToPublicProfile(userId);
-      debugPrint('Successfully migrated availability for user $userId to: $newAvailability');
-    } catch (e) {
-      debugPrint('Error migrating user availability for user $userId: $e');
-      rethrow;
-    }
-  }
-
-  // Fetch recommended users
-  Future<List<UserModel>> getRecommendedUsers(String currentUserId, List<String> skillsWantToLearn) async {
-    try {
-      debugPrint('Fetching recommended users from public_profiles for user ID: $currentUserId');
-      QuerySnapshot querySnapshot = await _firestore.collection('public_profiles').get();
-      List<UserModel> allUsers = [];
-
-      // Migrate availability for each user before mapping to UserModel
-      for (var doc in querySnapshot.docs) {
-        String userId = doc.id;
-        await migrateUserAvailability(userId); // Ensure availability is migrated
-      }
-
-      // Fetch the updated documents after migration
-      querySnapshot = await _firestore.collection('public_profiles').get();
-      allUsers = querySnapshot.docs
-          .map((doc) {
-        debugPrint('Processing user document: ${doc.id} with data: ${doc.data()}');
-        return UserModel.fromMap(doc.data() as Map<String, dynamic>, uid: doc.id);
-      })
-          .where((user) => user.uid != currentUserId)
-          .toList();
-
-      debugPrint('Total users after excluding current user from public_profiles: ${allUsers.length}');
-
-      if (allUsers.isEmpty) {
-        debugPrint('No users found in public_profiles after excluding current user, falling back to users collection');
-        querySnapshot = await _firestore.collection('users').get();
-
-        // Migrate availability for users in the users collection as well
-        for (var doc in querySnapshot.docs) {
-          String userId = doc.id;
-          await migrateUserAvailability(userId); // Ensure availability is migrated
-        }
-
-        // Fetch the updated documents after migration
-        querySnapshot = await _firestore.collection('users').get();
-        allUsers = querySnapshot.docs
-            .map((doc) {
-          debugPrint('Processing user document from users collection: ${doc.id} with data: ${doc.data()}');
-          return UserModel.fromMap(doc.data() as Map<String, dynamic>, uid: doc.id);
-        })
-            .where((user) => user.uid != currentUserId)
-            .toList();
-        debugPrint('Total users after excluding current user from users collection: ${allUsers.length}');
-      }
-
-      if (skillsWantToLearn.isNotEmpty) {
-        debugPrint('Filtering users based on skillsWantToLearn: $skillsWantToLearn');
-        allUsers = allUsers.where((user) {
-          bool matches = user.skillsCanTeach.any((skill) => skillsWantToLearn.contains(skill));
-          debugPrint('User ${user.fullName} (UID: ${user.uid}) skillsCanTeach: ${user.skillsCanTeach}, matches: $matches');
-          return matches;
-        }).toList();
-      }
-
-      allUsers.sort((a, b) => b.rating.compareTo(a.rating));
-      debugPrint('Found ${allUsers.length} recommended users after filtering');
-      return allUsers;
-    } catch (e) {
-      debugPrint('Error fetching recommended users: $e');
-      rethrow;
-    }
-  }*/
 
   // Update the welcome popup flag
   Future<void> updateWelcomePopupFlag(String uid, bool hasSeen) async {
@@ -669,6 +553,53 @@ class FirebaseService {
       debugPrint('Request $requestId updated successfully');
     } catch (e) {
       debugPrint('Error updating request $requestId: $e');
+      rethrow;
+    }
+  }
+
+  // Adjust time credits for sender and receiver after session completion
+  Future<void> adjustTimeCredits(String senderId, String receiverId) async {
+    try {
+      // Start a batch to ensure atomic updates
+      WriteBatch batch = _firestore.batch();
+
+      // Fetch sender's current time credits
+      DocumentSnapshot senderDoc = await _firestore.collection('users').doc(senderId).get();
+      if (!senderDoc.exists) {
+        throw Exception('Sender not found: $senderId');
+      }
+      int senderCredits = (senderDoc.data() as Map<String, dynamic>)['timeCredits'] ?? 0;
+      if (senderCredits < 1) {
+        throw Exception('Sender does not have enough time credits');
+      }
+
+      // Fetch receiver's current time credits
+      DocumentSnapshot receiverDoc = await _firestore.collection('users').doc(receiverId).get();
+      if (!receiverDoc.exists) {
+        throw Exception('Receiver not found: $receiverId');
+      }
+      int receiverCredits = (receiverDoc.data() as Map<String, dynamic>)['timeCredits'] ?? 0;
+
+      // Update sender's time credits (deduct 1)
+      batch.update(_firestore.collection('users').doc(senderId), {
+        'timeCredits': senderCredits - 1,
+      });
+
+      // Update receiver's time credits (add 1)
+      batch.update(_firestore.collection('users').doc(receiverId), {
+        'timeCredits': receiverCredits + 1,
+      });
+
+      // Commit the batch
+      await batch.commit();
+
+      // Sync both users to public_profiles
+      await syncUserToPublicProfile(senderId);
+      await syncUserToPublicProfile(receiverId);
+
+      debugPrint('Time credits adjusted: Sender ($senderId) now has ${senderCredits - 1}, Receiver ($receiverId) now has ${receiverCredits + 1}');
+    } catch (e) {
+      debugPrint('Error adjusting time credits for sender $senderId and receiver $receiverId: $e');
       rethrow;
     }
   }
